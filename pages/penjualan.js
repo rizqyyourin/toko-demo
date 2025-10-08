@@ -368,7 +368,7 @@ function initPage(){
   if(btnRefresh){
     // ensure only one handler
     btnRefresh.removeEventListener && btnRefresh.removeEventListener('click', (()=>{}));
-    btnRefresh.addEventListener('click', async ()=>{ await load(); showToast('Refreshed'); });
+  btnRefresh.addEventListener('click', async ()=>{ try{ bustCache && bustCache('penjualan'); }catch(e){}; await load(); showToast('Refreshed'); });
     // add global Tambah button next to refresh (if not present)
     if(!document.getElementById('btn-add')){
       const btnAddGlobal = document.createElement('button');
