@@ -67,6 +67,8 @@ async function renderList(items) {
       const edit = document.createElement('button'); edit.className='px-2 py-1 bg-primary text-white rounded text-sm'; edit.textContent='Edit'; edit.addEventListener('click', ()=> openForm(row));
       const del = document.createElement('button'); del.className='px-2 py-1 bg-danger text-white rounded text-sm'; del.textContent='Hapus';
       del.addEventListener('click', async ()=>{ if(!confirm('Hapus barang ini?')) return; try{ await remove('barang',{KODE: row.KODE}); showToast('Barang dihapus'); await load(); }catch(e){ console.error(e); showToast('Gagal menghapus'); }});
+  // notify other pages about change
+  del.addEventListener('click', async ()=>{ try{ const bc = new BroadcastChannel('toko_events'); bc.postMessage({ type: 'barang:changed' }); bc.close(); }catch(e){} });
       wrap.appendChild(edit); wrap.appendChild(del); return wrap;
     } }
   ];
@@ -171,7 +173,9 @@ async function openForm(row=null){ const isEdit=!!row; const form=document.creat
     // validate stock
     if(!Number.isFinite(payload.STOCK) || payload.STOCK < 0 || !Number.isInteger(payload.STOCK)) { showToast('Stock harus berupa angka bulat >= 0'); const s = form.querySelector('#fld-stock'); if(s && typeof s.focus === 'function') s.focus(); return; }
     if(!isEdit){ try{ const existing = await getList('barang'); const rows = existing.data || []; if(rows.some(r=>String(r.KODE)===String(payload.KODE))){ const uniq = form.querySelector('#fld-uniq-msg'); if(uniq) uniq.classList.remove('hidden'); return; } }catch(e){ console.error('[page:barang] uniqueness check failed', e); } }
-  try{ if(isEdit) await update('barang', payload); else await create('barang', payload); modal.close(); showToast(isEdit? 'Data barang diperbarui': 'Barang berhasil ditambahkan'); await load(); }catch(err){ console.error('[page:barang] save error', err); showToast('Gagal menyimpan data'); } });
+  try{ if(isEdit) await update('barang', payload); else await create('barang', payload); modal.close(); showToast(isEdit? 'Data barang diperbarui': 'Barang berhasil ditambahkan'); await load();
+      try{ const bc = new BroadcastChannel('toko_events'); bc.postMessage({ type: 'barang:changed' }); bc.close(); }catch(e){}
+    }catch(err){ console.error('[page:barang] save error', err); showToast('Gagal menyimpan data'); } });
   modal.open();
 }
 
