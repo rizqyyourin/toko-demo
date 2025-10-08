@@ -72,8 +72,8 @@ async function openForm(row=null){
           <table id="items-table" class="w-full border-collapse">
             <thead>
               <tr class="text-left text-sm text-muted">
-                <th class="p-2 min-w-[160px]">Barang</th>
-                <th class="p-2 w-24">Qty</th>
+                <th class="p-2 min-w-[120px]">Barang</th>
+                <th class="p-2 w-36">Qty</th>
                 <th class="p-2 w-28 text-right">Subtotal</th>
                 <th class="p-2 w-16">&nbsp;</th>
               </tr>
@@ -147,7 +147,7 @@ async function openForm(row=null){
     const tr = document.createElement('tr'); tr.className='border-t';
     // barang select
     const tdBarang = document.createElement('td'); tdBarang.className='p-2';
-  const sel = document.createElement('select'); sel.className='w-full min-w-[160px] border border-border rounded px-2 py-1 it-barang bg-white text-text';
+  const sel = document.createElement('select'); sel.className='w-full min-w-[120px] border border-border rounded px-2 py-1 it-barang bg-white text-text';
     const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
   barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); sel.appendChild(o); });
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
@@ -166,8 +166,8 @@ async function openForm(row=null){
     // qty input
     const tdQty = document.createElement('td'); tdQty.className='p-2';
   const inQty = document.createElement('input'); inQty.type='number'; inQty.min='0'; inQty.step='1';
-  // larger touch target on mobile: more padding and slightly larger text; keep compact on larger screens
-  inQty.className='w-full border border-border rounded px-3 py-2 sm:px-2 sm:py-1 it-qty bg-white text-text text-sm sm:text-base';
+  // larger, more prominent qty input: bigger padding and larger font for touch devices
+  inQty.className='w-full border border-border rounded px-3 py-2 sm:px-3 sm:py-2 it-qty bg-white text-text text-base sm:text-lg';
   inQty.value = data.QTY != null ? String(Number(data.QTY)) : '1';
     tdQty.appendChild(inQty); tr.appendChild(tdQty);
 
