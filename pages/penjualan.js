@@ -13,7 +13,11 @@ function parseIntFromStr(v){ if(v==null) return 0; const s = String(v).replace(/
 function formatRupiah(v){ return 'Rp ' + currencyFmt.format(Number(v||0)); }
 function formatDateLongISO(iso){ try{ if(!iso) return ''; // support stored short format DD/MM/YY
     if(/^\d{2}\/\d{2}\/\d{2}$/.test(String(iso))){ const m = String(iso).match(/(\d{2})\/(\d{2})\/(\d{2})/); if(m){ const d = new Date(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1])); if(!isNaN(d)) { const parts = new Intl.DateTimeFormat('id-ID',{ day:'numeric', month:'long', year:'numeric' }).format(d).split(' '); if(parts.length>=3) return `${parts[0]} ${parts[1].toLowerCase()} ${parts[2]}`; return parts.join(' '); } } }
-    const d = new Date(iso);
+  // if ISO YYYY-MM-DD, construct Date with components to avoid timezone shifts
+  const isoMatch = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let d;
+  if(isoMatch){ d = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3])); }
+  else { d = new Date(iso); }
     if(isNaN(d)) return String(iso);
     const parts = new Intl.DateTimeFormat('id-ID',{ day:'numeric', month:'long', year:'numeric' }).format(d).split(' ');
     if(parts.length>=3) return `${parts[0]} ${parts[1].toLowerCase()} ${parts[2]}`;
@@ -118,11 +122,21 @@ async function openForm(row=null){
     Array.from(itemsTbody.querySelectorAll('tr')).forEach(tr=>{
       const qty = Number(tr.querySelector('.it-qty').value||0);
       const kode = tr.querySelector('.it-barang').value;
-      const match = barangList.find(b => (b.KODE||b.KODE_BARANG||b.KODE) == kode);
-      const price = match ? Number(match.HARGA||0) : 0;
+      // try to read price from select option dataset (if present) or from barangList fallback
+      let price = 0;
+      try{
+        const sel = tr.querySelector('.it-barang');
+        const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+        if(opt && opt.dataset && opt.dataset.harga){ price = Number(String(opt.dataset.harga).replace(/[^0-9\-\.]/g,'')) || 0; }
+      }catch(e){}
+      if(!price){ const match = barangList.find(b => (b.KODE||b.KODE_BARANG||b.KODE) == kode); if(match){ price = Number(match.HARGA||0); } }
+      // fallback: if the row has a HARGA input stored as data attribute or initial data, try that
+      const rowHarga = (function(){ try{ const stored = tr.dataset.harga; if(stored) return Number(String(stored).replace(/[^0-9\-\.]/g,''))||0; return 0;}catch(e){return 0;} })();
+      if(!price && rowHarga) price = rowHarga;
       totalQty += qty;
-      totalSub += qty * price;
-      const subCell = tr.querySelector('.it-subtotal'); if(subCell) subCell.textContent = fmt(qty*price);
+      const line = qty * (price||0);
+      totalSub += line;
+      const subCell = tr.querySelector('.it-subtotal'); if(subCell) subCell.textContent = fmt(line);
     });
     totalQtyEl.textContent = String(totalQty);
     totalSubtotalEl.textContent = fmt(totalSub);
@@ -135,8 +149,10 @@ async function openForm(row=null){
     const tdBarang = document.createElement('td'); tdBarang.className='p-2';
   const sel = document.createElement('select'); sel.className='w-full min-w-[160px] border border-border rounded px-2 py-1 it-barang bg-white text-text';
     const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
-  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || b.HARGA || 0); sel.appendChild(o); });
+  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); sel.appendChild(o); });
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
+  // attach per-row HARGA as data attribute for fallback when barang list changes
+  if(data.HARGA != null){ try{ sel.parentNode && (sel.parentNode.parentNode && (sel.parentNode.parentNode.dataset.harga = String(data.HARGA))); }catch(e){} }
   tdBarang.appendChild(sel); tr.appendChild(tdBarang);
 
     // qty input
@@ -310,18 +326,20 @@ export async function load() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{
+function initPage(){
   initNav();
   highlightActive();
   const btnRefresh = document.getElementById('btn-refresh');
   if(btnRefresh){
+    // ensure only one handler
+    btnRefresh.removeEventListener && btnRefresh.removeEventListener('click', (()=>{}));
     btnRefresh.addEventListener('click', async ()=>{ await load(); showToast('Refreshed'); });
-    // add global Tambah button next to refresh
+    // add global Tambah button next to refresh (if not present)
     if(!document.getElementById('btn-add')){
       const btnAddGlobal = document.createElement('button');
       btnAddGlobal.id = 'btn-add';
       btnAddGlobal.type = 'button';
-  btnAddGlobal.className = 'w-full sm:w-auto px-3 py-2 bg-primary text-white rounded text-sm flex items-center justify-center gap-2';
+      btnAddGlobal.className = 'w-full sm:w-auto px-3 py-2 bg-primary text-white rounded text-sm flex items-center justify-center gap-2';
       btnAddGlobal.setAttribute('aria-label','Tambah');
       btnAddGlobal.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Tambah`;
       btnAddGlobal.addEventListener('click', ()=> openForm());
@@ -329,5 +347,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       try{ btnRefresh.parentNode.insertBefore(btnAddGlobal, btnRefresh.nextSibling); }catch(e){ /* fallback: append to body */ document.body.appendChild(btnAddGlobal); }
     }
   }
+  // initial load
   load();
-});
+}
+
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPage); else initPage();
