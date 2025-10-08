@@ -165,7 +165,10 @@ async function openForm(row=null){
 
     // qty input
     const tdQty = document.createElement('td'); tdQty.className='p-2';
-    const inQty = document.createElement('input'); inQty.type='number'; inQty.min='0'; inQty.step='1'; inQty.className='w-full border border-border rounded px-2 py-1 it-qty bg-white text-text'; inQty.value = data.QTY != null ? String(Number(data.QTY)) : '1';
+  const inQty = document.createElement('input'); inQty.type='number'; inQty.min='0'; inQty.step='1';
+  // larger touch target on mobile: more padding and slightly larger text; keep compact on larger screens
+  inQty.className='w-full border border-border rounded px-3 py-2 sm:px-2 sm:py-1 it-qty bg-white text-text text-sm sm:text-base';
+  inQty.value = data.QTY != null ? String(Number(data.QTY)) : '1';
     tdQty.appendChild(inQty); tr.appendChild(tdQty);
 
     // subtotal cell
