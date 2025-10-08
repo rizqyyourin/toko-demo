@@ -52,6 +52,7 @@ async function renderList(items) {
     { label: 'NAMA', field: 'NAMA', sortable: true, render: (v)=>{ const d=document.createElement('div'); d.className='truncate max-w-[220px]'; d.textContent=v; d.title=v; return d; } },
     { label: 'KATEGORI', field: 'KATEGORI', class: 'w-36', sortable: true },
   { label: 'HARGA', field: 'HARGA', class: 'w-28', tdClass: 'text-right', sortable: true, render: (v)=>{ const d=document.createElement('div'); d.className='text-right'; d.textContent = 'Rp ' + currencyFmt.format(Number(v||0)); return d; } },
+  { label: 'STOCK', field: 'STOCK', class: 'w-20 text-center', tdClass: 'text-center', sortable: true },
     { label: 'Aksi', field: '__actions', class: 'w-36', tdClass: 'w-36', render: (_, row) => {
       const wrap = document.createElement('div'); wrap.className='flex gap-2';
       const edit = document.createElement('button'); edit.className='px-2 py-1 bg-primary text-white rounded text-sm'; edit.textContent='Edit'; edit.addEventListener('click', ()=> openForm(row));
@@ -114,6 +115,11 @@ async function openForm(row=null){ const isEdit=!!row; const form=document.creat
         <input id="fld-harga" name="HARGA" type="hidden">
       </div>
     </label>
+    <label class="block"><div class="text-sm font-medium mb-1">STOCK</div>
+      <div class="flex">
+        <input id="fld-stock" name="STOCK" type="number" min="0" step="1" class="w-full border border-border rounded px-3 py-2" placeholder="0">
+      </div>
+    </label>
     <div id="fld-uniq-msg" class="text-sm text-danger mt-1 hidden">Kode sudah ada — gunakan kode lain.</div>
   </div>
   <div class="flex justify-end gap-2 mt-2"><button type="button" class="btn-cancel px-3 py-2">Batal</button><button type="submit" class="btn-submit px-3 py-2 bg-primary text-white rounded">Simpan</button></div>
@@ -133,7 +139,7 @@ async function openForm(row=null){ const isEdit=!!row; const form=document.creat
     sel.addEventListener('change', ()=>{ try{ msg.classList.add('hidden'); }catch(e){} });
   }
 
-  if(isEdit){ form.KODE.value = row.KODE; form.NAMA.value = row.NAMA || ''; const selK = form.querySelector('#fld-kategori'); if(selK) selK.value = row.KATEGORI || ''; form.querySelector('#fld-harga').value = row.HARGA || 0; form.querySelector('#fld-harga-display').value = row.HARGA ? ('Rp ' + currencyFmt.format(Number(row.HARGA))) : ''; } else { try{ const res = await getList('barang'); const rows = res.data || []; let max=0; rows.forEach(r=>{ const id = (r.KODE||'').toString(); const m = id.match(/BRG_(\d+)$/i); if(m){ const n=parseInt(m[1],10); if(!isNaN(n) && n>max) max = n;} }); const next = max+1; form.KODE.value = `BRG_${next}`; form.querySelector('#fld-harga').value = ''; form.querySelector('#fld-harga-display').value = ''; }catch(e){ form.KODE.value='BRG_1'; form.querySelector('#fld-harga').value = ''; form.querySelector('#fld-harga-display').value = ''; }}
+  if(isEdit){ form.KODE.value = row.KODE; form.NAMA.value = row.NAMA || ''; const selK = form.querySelector('#fld-kategori'); if(selK) selK.value = row.KATEGORI || ''; form.querySelector('#fld-harga').value = row.HARGA || 0; form.querySelector('#fld-harga-display').value = row.HARGA ? ('Rp ' + currencyFmt.format(Number(row.HARGA))) : ''; try{ const s = form.querySelector('#fld-stock'); if(s) s.value = (row.STOCK !== undefined && row.STOCK !== null) ? String(Number(row.STOCK)) : '0'; }catch(e){} } else { try{ const res = await getList('barang'); const rows = res.data || []; let max=0; rows.forEach(r=>{ const id = (r.KODE||'').toString(); const m = id.match(/BRG_(\d+)$/i); if(m){ const n=parseInt(m[1],10); if(!isNaN(n) && n>max) max = n;} }); const next = max+1; form.KODE.value = `BRG_${next}`; form.querySelector('#fld-harga').value = ''; form.querySelector('#fld-harga-display').value = ''; try{ const s = form.querySelector('#fld-stock'); if(s) s.value = '0'; }catch(e){} }catch(e){ form.KODE.value='BRG_1'; form.querySelector('#fld-harga').value = ''; form.querySelector('#fld-harga-display').value = ''; try{ const s = form.querySelector('#fld-stock'); if(s) s.value = '0'; }catch(e){} }}
   const idField = form.querySelector('#fld-kode'); if(idField){ const idMsg = form.querySelector('#fld-kode-msg'); idField.addEventListener('input', ()=>{ const v = idField.value.toUpperCase().replace(/[^A-Z0-9_]/g,''); idField.value = v; if(!/^BRG_[0-9]+$/.test(v)){ if(idMsg) idMsg.classList.remove('hidden'); } else { if(idMsg) idMsg.classList.add('hidden'); } }); }
   // HARGA display formatting: show "Rp x.xxx" to user, keep numeric value in hidden input (#fld-harga)
   const displayHarga = form.querySelector('#fld-harga-display'); const hiddenHarga = form.querySelector('#fld-harga');
@@ -142,10 +148,14 @@ async function openForm(row=null){ const isEdit=!!row; const form=document.creat
     displayHarga.addEventListener('blur', (e)=>{ if(!hiddenHarga.value) e.target.value = ''; else e.target.value = fmt(hiddenHarga.value); }); }
   const modal = createModal({ title: isEdit ? 'Edit Barang' : 'Tambah Barang', content: form, onClose: null });
   form.querySelector('.btn-cancel').addEventListener('click', ()=> modal.close());
-  form.addEventListener('submit', async (e)=>{ e.preventDefault(); const payload = { KODE: form.KODE.value.trim(), NAMA: form.NAMA.value.trim(), KATEGORI: form.KATEGORI.value ? form.KATEGORI.value.trim() : '', HARGA: Number(form.HARGA.value) };
+  form.addEventListener('submit', async (e)=>{ e.preventDefault(); const payload = { KODE: form.KODE.value.trim(), NAMA: form.NAMA.value.trim(), KATEGORI: form.KATEGORI.value ? form.KATEGORI.value.trim() : '', HARGA: Number(form.HARGA.value), STOCK: Number(form.STOCK && form.STOCK.value ? form.STOCK.value : 0) };
     // validate kategori selection
     if(!payload.KATEGORI){ const km = form.querySelector('#fld-kategori-msg'); if(km) km.classList.remove('hidden'); showToast('Pilih kategori terlebih dahulu'); return; }
-    if(!payload.KODE || !payload.NAMA) { showToast('KODE dan NAMA harus diisi'); return; } if(!/^BRG_[0-9]+$/.test(payload.KODE)){ showToast('Kode harus berformat BRG_123'); return; } if(!isEdit){ try{ const existing = await getList('barang'); const rows = existing.data || []; if(rows.some(r=>String(r.KODE)===String(payload.KODE))){ const uniq = form.querySelector('#fld-uniq-msg'); if(uniq) uniq.classList.remove('hidden'); return; } }catch(e){ console.error('[page:barang] uniqueness check failed', e); } }
+    if(!payload.KODE || !payload.NAMA) { showToast('KODE dan NAMA harus diisi'); return; }
+    if(!/^BRG_[0-9]+$/.test(payload.KODE)){ showToast('Kode harus berformat BRG_123'); return; }
+    // validate stock
+    if(!Number.isFinite(payload.STOCK) || payload.STOCK < 0 || !Number.isInteger(payload.STOCK)) { showToast('Stock harus berupa angka bulat >= 0'); const s = form.querySelector('#fld-stock'); if(s && typeof s.focus === 'function') s.focus(); return; }
+    if(!isEdit){ try{ const existing = await getList('barang'); const rows = existing.data || []; if(rows.some(r=>String(r.KODE)===String(payload.KODE))){ const uniq = form.querySelector('#fld-uniq-msg'); if(uniq) uniq.classList.remove('hidden'); return; } }catch(e){ console.error('[page:barang] uniqueness check failed', e); } }
   try{ if(isEdit) await update('barang', payload); else await create('barang', payload); modal.close(); showToast(isEdit? 'Data barang diperbarui': 'Barang berhasil ditambahkan'); await load(); }catch(err){ console.error('[page:barang] save error', err); showToast('Gagal menyimpan data'); } });
   modal.open();
 }
