@@ -185,8 +185,7 @@ async function openForm(row=null){
   });
   inQty.addEventListener('input', computeTotals);
 
-    // initial compute
-    computeTotals();
+    // don't compute totals here; caller will compute after appending the row
     return tr;
   }
 
@@ -197,7 +196,13 @@ async function openForm(row=null){
     try{ tglField.value = parseStoredDateToInput(row.TGL); }catch(e){}
     kodeField.value = row.KODE_PELANGGAN || '';
     // load existing item rows for this nota
-    try{ const res = await getList('item_penjualan'); const items = (res.data||[]).filter(it => String(it.NOTA||it.NOTA) === String(row.ID_NOTA)); items.forEach(it=>{ itemsTbody.appendChild(createItemRow({ KODE_BARANG: it.KODE_BARANG || it.KODE, QTY: it.QTY || it.JUMLAH || 0, HARGA: it.HARGA || 0 })); }); }catch(e){ console.warn('[page:penjualan] failed to load item_penjualan for edit', e); }
+    try{
+      const res = await getList('item_penjualan');
+      const items = (res.data||[]).filter(it => String(it.NOTA||it.NOTA) === String(row.ID_NOTA));
+      items.forEach(it=>{ itemsTbody.appendChild(createItemRow({ KODE_BARANG: it.KODE_BARANG || it.KODE, QTY: it.QTY || it.JUMLAH || 0, HARGA: it.HARGA || 0 })); });
+      // compute totals after all rows appended so last row is included
+      computeTotals();
+    }catch(e){ console.warn('[page:penjualan] failed to load item_penjualan for edit', e); }
   } else {
     // new nota: compute next and set today's date
     try{ const res = await getList('penjualan'); const rows = res.data || []; let max=0; rows.forEach(r=>{ const m = (r.ID_NOTA||'').toString().match(/NOTA_(\d+)$/i); if(m){ const n=parseInt(m[1],10); if(!isNaN(n) && n>max) max=n; } }); const next = max+1; notaField.value = `NOTA_${next}`; }catch(e){ notaField.value='NOTA_1'; }
@@ -205,10 +210,11 @@ async function openForm(row=null){
     const today = new Date(); tglField.value = today.toISOString().slice(0,10);
     // start with one empty item row
     itemsTbody.appendChild(createItemRow());
+    computeTotals();
   }
 
   // add item button
-  btnAddItem.addEventListener('click', ()=>{ itemsTbody.appendChild(createItemRow()); });
+  btnAddItem.addEventListener('click', ()=>{ itemsTbody.appendChild(createItemRow()); computeTotals(); });
 
   // ID sanitization
   if(notaField){ const idMsg = form.querySelector('#fld-nota-msg'); notaField.addEventListener('input', ()=>{ const v = notaField.value.toUpperCase().replace(/[^A-Z0-9_]/g,''); notaField.value = v; if(!/^NOTA_[0-9]+$/.test(v)){ if(idMsg) idMsg.classList.remove('hidden'); } else { if(idMsg) idMsg.classList.add('hidden'); } }); }
