@@ -153,7 +153,15 @@ async function openForm(row=null){
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
   tdBarang.appendChild(sel); tr.appendChild(tdBarang);
   // attach per-row HARGA as data attribute for fallback when barang list changes
-  if(data.HARGA != null){ try{ tr.dataset.harga = String(data.HARGA); }catch(e){} }
+  try{
+    let initialPrice = null;
+    if(data.HARGA != null){ initialPrice = Number(data.HARGA)||0; }
+    if(initialPrice === null || initialPrice === 0){ // try to find price from barangList by kode
+      const kode = data.KODE_BARANG || data.KODE || sel.value;
+      if(kode){ const m = barangList.find(b => (b.KODE||b.KODE_BARANG||b.KODE) == kode); if(m && m.HARGA != null) initialPrice = Number(m.HARGA)||0; }
+    }
+    if(initialPrice !== null){ tr.dataset.harga = String(initialPrice); }
+  }catch(e){}
 
     // qty input
     const tdQty = document.createElement('td'); tdQty.className='p-2';
