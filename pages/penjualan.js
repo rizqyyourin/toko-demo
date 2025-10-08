@@ -168,7 +168,8 @@ async function openForm(row=null){
     const tdQty = document.createElement('td'); tdQty.className='p-2';
   const inQty = document.createElement('input'); inQty.type='number'; inQty.min='0'; inQty.step='1';
   // larger, more prominent qty input: fixed wider width and centered text for clarity
-  inQty.className='border border-border rounded px-3 py-2 it-qty bg-white text-text text-base sm:text-lg w-20 sm:w-28 text-center';
+  // keep width but reduce vertical padding so the box is visually smaller
+  inQty.className='border border-border rounded px-3 py-1 sm:py-2 it-qty bg-white text-text text-base sm:text-lg w-20 sm:w-28 text-center';
   inQty.value = data.QTY != null ? String(Number(data.QTY)) : '1';
     tdQty.appendChild(inQty); tr.appendChild(tdQty);
 
