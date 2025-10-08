@@ -130,11 +130,7 @@ async function openForm(row=null){
   }
   if(btnRefreshBarang){ btnRefreshBarang.addEventListener('click', async ()=>{ await refreshBarangList(); showToast('Daftar barang diperbarui'); }); }
 
-  // Listen for global events (e.g., barang changed in another tab) and refresh options when open
-  try{
-    const bc = new BroadcastChannel('toko_events');
-    bc.addEventListener('message', (ev)=>{ try{ if(ev && ev.data && ev.data.type === 'barang:changed'){ refreshBarangList(); showToast('Daftar barang diperbarui (update)'); } }catch(e){} });
-  }catch(e){}
+  // Cross-tab auto-refresh removed per user request; rely on manual refresh and fresh fetch on open
 
   // helper to format currency
   const fmt = (v)=>{
