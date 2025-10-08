@@ -150,7 +150,7 @@ async function openForm(row=null){
   // narrower dropdown so it doesn't steal space from qty on small screens
   const sel = document.createElement('select'); sel.className='border border-border rounded px-2 py-1 it-barang bg-white text-text w-28 sm:w-40';
     const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
-  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); sel.appendChild(o); });
+  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); if(b.STOCK != null) o.dataset.stock = String(b.STOCK); sel.appendChild(o); });
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
   tdBarang.appendChild(sel); tr.appendChild(tdBarang);
   // attach per-row HARGA as data attribute for fallback when barang list changes
@@ -194,6 +194,12 @@ async function openForm(row=null){
   sel.addEventListener('change', ()=>{
     // when user changes selected barang, clear any per-row stored harga (use option dataset instead)
     try{ delete tr.dataset.harga; }catch(e){}
+    // set qty max from selected option's data-stock (if available)
+    try{
+      const opt = sel.selectedOptions && sel.selectedOptions[0] || sel.options[sel.selectedIndex];
+      const stockVal = opt && opt.dataset && opt.dataset.stock ? Number(opt.dataset.stock) : null;
+      const qtyEl = tr.querySelector('.it-qty'); if(qtyEl && stockVal !== null){ qtyEl.max = String(stockVal); }
+    }catch(e){}
     computeTotals();
   });
   inQty.addEventListener('input', computeTotals);
@@ -252,22 +258,76 @@ async function openForm(row=null){
     if(!notaField.value || !kodeField.value){ showToast('ID_NOTA dan KODE_PELANGGAN harus diisi'); return; }
     if(!/^NOTA_[0-9]+$/.test(notaField.value)){ showToast('Format ID_NOTA salah'); return; }
     if(items.length===0){ showToast('Tambahkan minimal satu item'); return; }
+
+    // validate that no item's qty exceeds available stock (data-stock on option or tr.dataset.stock)
+    try{
+      const rowEls = Array.from(itemsTbody.querySelectorAll('tr'));
+      for(const tr of rowEls){
+        const sel = tr.querySelector('.it-barang');
+        const qtyEl = tr.querySelector('.it-qty');
+        const qty = Number(qtyEl && qtyEl.value ? qtyEl.value : 0);
+        let stock = null;
+        try{
+          const opt = (sel && sel.selectedOptions && sel.selectedOptions[0]) || (sel && sel.options && sel.options[sel.selectedIndex]);
+          if(opt && opt.dataset && opt.dataset.stock != null && String(opt.dataset.stock).trim() !== ''){
+            stock = Number(opt.dataset.stock);
+          } else if(tr.dataset && tr.dataset.stock != null && String(tr.dataset.stock).trim() !== ''){
+            stock = Number(tr.dataset.stock);
+          }
+        }catch(e){}
+        if(stock != null && !isNaN(stock) && qty > stock){
+          const kode = (sel && sel.value) ? sel.value : 'item';
+          showToast(`Jumlah untuk ${kode} melebihi stok (${stock})`);
+          if(qtyEl && typeof qtyEl.focus === 'function') qtyEl.focus();
+          return;
+        }
+      }
+    }catch(e){ console.warn('[page:penjualan] stock validation failed', e); }
     const totals = computeTotals();
   const payload = { ID_NOTA: notaField.value.trim(), TGL: (tglField.value ? formatDateShortFromInput(tglField.value) : ''), KODE_PELANGGAN: kodeField.value.trim(), SUBTOTAL: Number(totals.totalSub || 0), TOTAL_QTY: Number(totals.totalQty || 0) };
 
     try{
       if(isEdit){
         await update('penjualan', payload);
-        // delete existing items for this nota then recreate
-        try{ await remove('item_penjualan', { NOTA: payload.ID_NOTA }); }catch(er){ console.warn('[page:penjualan] failed to remove existing item_penjualan before recreate', er); }
+        // fetch existing items to compute a diff
+        let existingItems = [];
+        try{ const res = await getList('item_penjualan'); existingItems = (res.data||[]).filter(it => String(it.NOTA||it.NOTA) === String(payload.ID_NOTA)); }catch(e){ console.warn('[page:penjualan] failed to fetch existing item_penjualan for diff', e); }
+
+        // build a map keyed by KODE_BARANG for existing and new items
+        const existingMap = {}; existingItems.forEach(it => { existingMap[String(it.KODE_BARANG || it.KODE || '')] = { QTY: Number(it.QTY||0), HARGA: Number(it.HARGA||0) }; });
+        const newMap = {}; items.forEach(it => { newMap[String(it.KODE_BARANG||'')] = { QTY: Number(it.QTY||0), HARGA: Number(it.HARGA||0) }; });
+
+        // deletes: in existingMap but not in newMap
+        for(const kode of Object.keys(existingMap)){
+          if(!newMap.hasOwnProperty(kode)){
+            try{ await remove('item_penjualan', { NOTA: payload.ID_NOTA, KODE_BARANG: kode }); }catch(er){ console.error('[page:penjualan] failed to delete item_penjualan', kode, er); showToast(`Gagal menghapus item ${kode}`); }
+          }
+        }
+
+        // updates and creates
+        for(const kode of Object.keys(newMap)){
+          const ni = newMap[kode];
+          if(existingMap.hasOwnProperty(kode)){
+            const ei = existingMap[kode];
+            if(Number(ei.QTY) !== Number(ni.QTY) || Number(ei.HARGA) !== Number(ni.HARGA)){
+              // update row
+              const upd = { NOTA: payload.ID_NOTA, KODE_BARANG: kode, QTY: ni.QTY, HARGA: ni.HARGA };
+              try{ await update('item_penjualan', upd); }catch(er){ console.error('[page:penjualan] failed to update item_penjualan', kode, er); showToast(`Gagal memperbarui item ${kode}`); }
+            }
+          } else {
+            // create new item
+            const itemPayload = { NOTA: payload.ID_NOTA, KODE_BARANG: kode, QTY: ni.QTY, HARGA: ni.HARGA, SUBTOTAL: Number(ni.QTY * ni.HARGA || 0), TGL: payload.TGL };
+            try{ const res = await create('item_penjualan', itemPayload); if(!res || !res.ok) { throw new Error(res && res.error ? res.error : 'create failed'); } }catch(er){ console.error('[page:penjualan] failed to create item_penjualan', kode, er); showToast(`Gagal menambah item ${kode}: ${er && er.message?er.message:er}`); }
+          }
+        }
       } else {
         await create('penjualan', payload);
-      }
-      // create item_penjualan rows
-      for(const it of items){
-        // include the penjualan date (TGL) on each item row so item_penjualan can be filtered directly
-        const itemPayload = { NOTA: payload.ID_NOTA, KODE_BARANG: it.KODE_BARANG, QTY: it.QTY, HARGA: it.HARGA, SUBTOTAL: Number(it.QTY * it.HARGA || 0), TGL: payload.TGL };
-        try{ await create('item_penjualan', itemPayload); }catch(er){ console.error('[page:penjualan] failed to create item_penjualan', er); }
+        // create item_penjualan rows
+        for(const it of items){
+          // include the penjualan date (TGL) on each item row so item_penjualan can be filtered directly
+          const itemPayload = { NOTA: payload.ID_NOTA, KODE_BARANG: it.KODE_BARANG, QTY: it.QTY, HARGA: it.HARGA, SUBTOTAL: Number(it.QTY * it.HARGA || 0), TGL: payload.TGL };
+          try{ const res = await create('item_penjualan', itemPayload); if(!res || !res.ok) { throw new Error(res && res.error ? res.error : 'create failed'); } }catch(er){ console.error('[page:penjualan] failed to create item_penjualan', er); showToast(`Gagal menambah item ${it.KODE_BARANG}: ${er && er.message?er.message:er}`); }
+        }
       }
       modal.close();
       showToast(isEdit? 'Data penjualan diperbarui':'Penjualan berhasil ditambahkan');
