@@ -48,11 +48,12 @@ async function openForm(row=null){
   const isEdit = !!row;
   const form = document.createElement('form'); form.className='space-y-4';
 
-  // fetch pelanggan and barang lists to populate selects
+  // fetch fresh pelanggan and barang lists to populate selects
+  // ensure we get up-to-date stock values by busting cache first
   let pelangganList = [];
   let barangList = [];
   try{ const p = await getList('pelanggan'); pelangganList = p.data || []; }catch(e){ console.warn('[page:penjualan] failed to fetch pelanggan for form', e); }
-  try{ const b = await getList('barang'); barangList = b.data || []; }catch(e){ console.warn('[page:penjualan] failed to fetch barang for form', e); }
+  try{ bustCache('barang'); const b = await getList('barang', { useCache: false }); barangList = b.data || []; }catch(e){ console.warn('[page:penjualan] failed to fetch barang for form', e); }
 
   form.innerHTML = `
     <div class="grid grid-cols-1 gap-3">
@@ -66,7 +67,10 @@ async function openForm(row=null){
       <div>
         <div class="flex items-start justify-between">
           <div class="text-sm font-medium mb-2">Item Barang</div>
-          <div class="mb-2"><button id="btn-add-item" type="button" class="px-3 py-1 border rounded text-sm">Tambah Item</button></div>
+          <div class="mb-2 flex items-center gap-2">
+            <button id="btn-refresh-barang" type="button" class="px-2 py-1 border rounded text-sm" title="Refresh daftar barang">⟳</button>
+            <button id="btn-add-item" type="button" class="px-3 py-1 border rounded text-sm">Tambah Item</button>
+          </div>
         </div>
   <div class="overflow-x-auto overflow-visible">
           <table id="items-table" class="w-full border-collapse">
@@ -95,6 +99,7 @@ async function openForm(row=null){
   const kodeField = form.querySelector('#fld-kode-pelanggan');
   const itemsTbody = form.querySelector('#items-table tbody');
   const btnAddItem = form.querySelector('#btn-add-item');
+  const btnRefreshBarang = form.querySelector('#btn-refresh-barang');
   const totalQtyEl = form.querySelector('#total-qty');
   const totalSubtotalEl = form.querySelector('#total-subtotal');
 
@@ -106,6 +111,24 @@ async function openForm(row=null){
       const opt = document.createElement('option'); opt.value = p.ID_PELANGGAN || p.ID || p.ID_PELANGGAN; opt.textContent = p.NAMA || opt.value; kodeField.appendChild(opt);
     });
   })();
+
+  // refresh barang list inside the modal (updates all selects)
+  async function refreshBarangList(){
+    try{ bustCache('barang'); const res = await getList('barang', { useCache: false }); barangList = res.data || []; 
+      // update existing selects' option lists
+      const selects = Array.from(form.querySelectorAll('select.it-barang'));
+      selects.forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = '';
+        const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
+        barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); if(b.STOCK != null) o.dataset.stock = String(b.STOCK); try{ const sVal = (b.STOCK === undefined || b.STOCK === null) ? null : Number(b.STOCK); if(sVal !== null && !isNaN(sVal) && sVal <= 0){ o.disabled = true; o.textContent = (o.textContent || '') + ' (Habis)'; } }catch(e){} sel.appendChild(o); });
+        try{ sel.value = cur; }catch(e){ sel.value = ''; }
+        // trigger change to refresh qty constraints and hints
+        try{ sel.dispatchEvent(new Event('change')); }catch(e){}
+      });
+    }catch(e){ console.warn('[page:penjualan] failed to refresh barang list', e); showToast('Gagal memperbarui daftar barang'); }
+  }
+  if(btnRefreshBarang){ btnRefreshBarang.addEventListener('click', async ()=>{ await refreshBarangList(); showToast('Daftar barang diperbarui'); }); }
 
   // helper to format currency
   const fmt = (v)=>{
