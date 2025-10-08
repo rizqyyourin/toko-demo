@@ -92,7 +92,13 @@ function updateSortIcons(wrap){
 
 function applyFilterSort(){
   let rows = state.rows.slice();
-  if(state.query){ const q=state.query.toLowerCase(); rows = rows.filter(r => { const combined = ((r.NAMA||'') + ' ' + (r.KODE||'') + ' ' + (r.KATEGORI||'') + ' ' + String(r.HARGA||'')).toLowerCase(); return combined.includes(q); }); }
+  if(state.query){ const q=state.query.toLowerCase().trim(); // support special keyword 'kosong' to show out-of-stock items
+    if(q.includes('kosong')){
+      rows = rows.filter(r => { const s = r.STOCK; return s === '' || s === null || s === undefined || Number(s) === 0; });
+    } else {
+      rows = rows.filter(r => { const combined = ((r.NAMA||'') + ' ' + (r.KODE||'') + ' ' + (r.KATEGORI||'') + ' ' + String(r.HARGA||'')).toLowerCase(); return combined.includes(q); });
+    }
+  }
   if(state.sort.field){ rows.sort((a,b)=>{ const f=state.sort.field; if(f==='KODE'){ const na = (a.KODE||'').match(/BRG_(\d+)$/i); const nb = (b.KODE||'').match(/BRG_(\d+)$/i); const ia=na?parseInt(na[1],10):-1; const ib=nb?parseInt(nb[1],10):-1; if(ia<ib) return -1*state.sort.dir; if(ia>ib) return 1*state.sort.dir; return 0; } if(f==='HARGA'){ const va = Number(a[f]||0); const vb = Number(b[f]||0); return (va<vb ? -1 : va>vb ? 1 : 0) * state.sort.dir; } const fa = (a[f]||'').toString().toLowerCase(); const fb = (b[f]||'').toString().toLowerCase(); if(fa<fb) return -1*state.sort.dir; if(fa>fb) return 1*state.sort.dir; return 0; }); }
   const total = rows.length; const per = state.perPage||10; const totalPages = Math.max(1, Math.ceil(total/per)); if(state.page>totalPages) state.page=totalPages; const start=(state.page-1)*per; const end=start+per; const pageRows = rows.slice(start,end);
   const area = containerEl.querySelector('#list-area'); const tableWrap = state.tableWrap || (area && area.querySelector('div.w-full')); if(!tableWrap) return; const tbody = tableWrap.querySelector('tbody'); if(!tbody) return;
