@@ -13,7 +13,8 @@ const TABLES = {
   },
   barang: {
     sheet: 'BARANG',
-    headers: ['KODE','NAMA','KATEGORI','HARGA'],
+    // add STOCK column to track available inventory
+    headers: ['KODE','NAMA','KATEGORI','HARGA','STOCK'],
     keyCols: ['KODE']
   },
   penjualan: {
@@ -65,16 +66,17 @@ function seedAll() {
     'BARANG',
     TABLES.barang.headers,
     [
-      ['BRG_1','PEN','ATK',15000],
-      ['BRG_2','PENSIL','ATK',10000],
-      ['BRG_3','PAYUNG','RT',70000],
-      ['BRG_4','PANCI','MASAK',110000],
-      ['BRG_5','SAPU','RT',40000],
-      ['BRG_6','KIPAS','ELEKTRONIK',200000],
-      ['BRG_7','KUALI','MASAK',120000],
-      ['BRG_8','SIKAT','RT',30000],
-      ['BRG_9','GELAS','RT',25000],
-      ['BRG_10','PIRING','RT',35000],
+      // KODE, NAMA, KATEGORI, HARGA, STOCK
+      ['BRG_1','PEN','ATK',15000,50],
+      ['BRG_2','PENSIL','ATK',10000,100],
+      ['BRG_3','PAYUNG','RT',70000,20],
+      ['BRG_4','PANCI','MASAK',110000,10],
+      ['BRG_5','SAPU','RT',40000,30],
+      ['BRG_6','KIPAS','ELEKTRONIK',200000,15],
+      ['BRG_7','KUALI','MASAK',120000,12],
+      ['BRG_8','SIKAT','RT',30000,40],
+      ['BRG_9','GELAS','RT',25000,25],
+      ['BRG_10','PIRING','RT',35000,18],
     ]
   );
 
@@ -222,6 +224,36 @@ function clearBelowHeader_(sh) {
   const lastRow = sh.getLastRow();
   const lastCol = sh.getLastColumn();
   if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+}
+
+// Ensure BARANG has STOCK column and backfill missing values with 0
+function ensureStockColumn() {
+  const ss = ssMenu();
+  const sh = ss.getSheetByName('BARANG');
+  if (!sh) return;
+  const headers = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+  const idx = headers.indexOf('STOCK');
+  if (idx >= 0) return; // already present
+  // add STOCK as last column
+  sh.getRange(1, headers.length + 1).setValue('STOCK');
+}
+
+function backfillStockIfMissing() {
+  const ss = ssMenu();
+  const sh = ss.getSheetByName('BARANG');
+  if (!sh) return;
+  const data = sh.getDataRange().getValues();
+  if (data.length <= 1) return;
+  const headers = data[0];
+  const stockIdx = headers.indexOf('STOCK');
+  if (stockIdx < 0) return;
+  const rows = data.slice(1);
+  const updates = [];
+  rows.forEach((r, i) => {
+    const val = r[stockIdx];
+    if (val === '' || val === null || val === undefined) updates.push([0]); else updates.push([r[stockIdx]]);
+  });
+  if (updates.length) sh.getRange(2, stockIdx+1, updates.length, 1).setValues(updates);
 }
 
 function ensureHeaders_(sh, headers) {
