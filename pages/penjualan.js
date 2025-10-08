@@ -126,13 +126,13 @@ async function openForm(row=null){
       let price = 0;
       try{
         const sel = tr.querySelector('.it-barang');
-        const opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+        const opt = (sel && sel.selectedOptions && sel.selectedOptions[0]) || (sel && sel.options && sel.options[sel.selectedIndex]);
         if(opt && opt.dataset && opt.dataset.harga){ price = Number(String(opt.dataset.harga).replace(/[^0-9\-\.]/g,'')) || 0; }
       }catch(e){}
       if(!price){ const match = barangList.find(b => (b.KODE||b.KODE_BARANG||b.KODE) == kode); if(match){ price = Number(match.HARGA||0); } }
       // fallback: if the row has a HARGA input stored as data attribute or initial data, try that
-      const rowHarga = (function(){ try{ const stored = tr.dataset.harga; if(stored) return Number(String(stored).replace(/[^0-9\-\.]/g,''))||0; return 0;}catch(e){return 0;} })();
-      if(!price && rowHarga) price = rowHarga;
+  const rowHarga = (function(){ try{ const stored = tr.dataset.harga; if(stored !== undefined && stored !== null && String(stored).trim() !== '') return Number(String(stored).replace(/[^0-9\-\.]/g,''))||0; return null;}catch(e){return null;} })();
+  if((price === 0 || !price) && rowHarga !== null){ price = rowHarga; }
       totalQty += qty;
       const line = qty * (price||0);
       totalSub += line;
@@ -151,9 +151,9 @@ async function openForm(row=null){
     const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
   barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); sel.appendChild(o); });
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
-  // attach per-row HARGA as data attribute for fallback when barang list changes
-  if(data.HARGA != null){ try{ sel.parentNode && (sel.parentNode.parentNode && (sel.parentNode.parentNode.dataset.harga = String(data.HARGA))); }catch(e){} }
   tdBarang.appendChild(sel); tr.appendChild(tdBarang);
+  // attach per-row HARGA as data attribute for fallback when barang list changes
+  if(data.HARGA != null){ try{ tr.dataset.harga = String(data.HARGA); }catch(e){} }
 
     // qty input
     const tdQty = document.createElement('td'); tdQty.className='p-2';
@@ -170,7 +170,11 @@ async function openForm(row=null){
     tdAct.appendChild(btnRem); tr.appendChild(tdAct);
 
   // wiring: recompute totals when barang or qty changes
-  sel.addEventListener('change', ()=>{ computeTotals(); });
+  sel.addEventListener('change', ()=>{
+    // when user changes selected barang, clear any per-row stored harga (use option dataset instead)
+    try{ delete tr.dataset.harga; }catch(e){}
+    computeTotals();
+  });
   inQty.addEventListener('input', computeTotals);
 
     // initial compute
@@ -208,11 +212,16 @@ async function openForm(row=null){
     e.preventDefault();
     // collect items
     const rows = Array.from(itemsTbody.querySelectorAll('tr'));
-    const items = rows.map(tr => ({
-      KODE_BARANG: tr.querySelector('.it-barang').value,
-      QTY: Number(tr.querySelector('.it-qty').value||0),
-      HARGA: (function(){ const kode = tr.querySelector('.it-barang').value; const m = barangList.find(b=> (b.KODE||b.KODE_BARANG||b.KODE) == kode); return m ? Number(m.HARGA||0) : 0; })(),
-    })).filter(it=>it.KODE_BARANG && it.QTY>0);
+    const items = rows.map(tr => {
+      const kode = tr.querySelector('.it-barang').value;
+      const qty = Number(tr.querySelector('.it-qty').value||0);
+      // resolve harga: option dataset -> barangList lookup -> tr.dataset.harga -> 0
+      let harga = 0;
+      try{ const sel = tr.querySelector('.it-barang'); const opt = (sel && sel.selectedOptions && sel.selectedOptions[0]) || (sel && sel.options && sel.options[sel.selectedIndex]); if(opt && opt.dataset && opt.dataset.harga) harga = Number(String(opt.dataset.harga).replace(/[^0-9\-\.]/g,''))||0; }catch(e){}
+  if(!harga){ const m = barangList.find(b=> (b.KODE||b.KODE_BARANG||b.KODE) == kode); if(m) harga = Number(m.HARGA||0); }
+  if((harga === 0 || !harga)){ try{ const stored = tr.dataset.harga; if(stored !== undefined && stored !== null && String(stored).trim() !== '') harga = Number(String(stored).replace(/[^0-9\-\.]/g,''))||0; }catch(e){} }
+      return { KODE_BARANG: kode, QTY: qty, HARGA: harga };
+    }).filter(it=>it.KODE_BARANG && it.QTY>0);
     if(!notaField.value || !kodeField.value){ showToast('ID_NOTA dan KODE_PELANGGAN harus diisi'); return; }
     if(!/^NOTA_[0-9]+$/.test(notaField.value)){ showToast('Format ID_NOTA salah'); return; }
     if(items.length===0){ showToast('Tambahkan minimal satu item'); return; }
