@@ -173,15 +173,65 @@ function doPost(e) {
     const payload = body.payload || {};
 
     if (action === 'create') {
+      // if creating an item_penjualan, check stock first and decrement atomically
+      if (String(tableCfg.sheet).toUpperCase() === 'ITEM_PENJUALAN') {
+        const kode = payload.KODE_BARANG || payload.KODE;
+        const qty = Number(payload.QTY || payload.JUMLAH || 0);
+        if (!kode || !qty || qty <= 0) return json({ ok:false, error:'Invalid item payload' }, 400);
+        try {
+          // attempt to decrement; adjustStock will throw if insufficient
+          adjustStock(kode, -Math.abs(qty));
+        } catch (err) {
+          return json({ ok:false, error: String(err) }, 409);
+        }
+        // stock reserved, now append the row
+        const row = mapObjectToRow(tableCfg, payload);
+        appendOne_Web(tableCfg, row);
+        return json({ ok:true, data: payload });
+      }
       const row = mapObjectToRow(tableCfg, payload);
       appendOne_Web(tableCfg, row);
       return json({ ok:true, data: payload });
     }
     if (action === 'update') {
+      // Updating item_penjualan requires adjusting stock by delta
+      if (String(tableCfg.sheet).toUpperCase() === 'ITEM_PENJUALAN') {
+        // find existing row to compute delta
+        const sh = getSheet_Web(tableCfg.sheet);
+        ensureHeaders_(sh, tableCfg.headers);
+        const data = sh.getDataRange().getValues();
+        const headers = data[0];
+        const rows = data.slice(1);
+        const keyIdxs = tableCfg.keyCols.map(k => headers.indexOf(k));
+        const keyVals = tableCfg.keyCols.map(k => payload[k]);
+        const idx = rows.findIndex(r => keyIdxs.every((kIdx, i) => String(r[kIdx]) === String(keyVals[i])));
+        if (idx >= 0) {
+          const oldQty = Number(rows[idx][headers.indexOf('QTY')] || 0);
+          const newQty = Number(payload.QTY || payload.JUMLAH || 0);
+          const delta = Number(newQty) - Number(oldQty);
+          if (delta !== 0) {
+            // negative delta => decrement more stock; positive delta => replenish stock
+            adjustStock(payload.KODE_BARANG || payload.KODE, -Math.sign(delta) * Math.abs(delta));
+          }
+        }
+      }
       updateByKey_Web(tableCfg, payload);
       return json({ ok:true, data: payload });
     }
     if (action === 'delete') {
+      // If deleting ALL items for a nota (frontend may call delete on item_penjualan with {NOTA:..}),
+      // or deleting a penjualan (which should remove its items), restore stock accordingly.
+      try{
+        if (String(tableCfg.sheet).toUpperCase() === 'ITEM_PENJUALAN' && payload && payload.NOTA) {
+          // delete all item_penjualan rows for this nota and restore stock
+          deleteItemPenjualanByNota(payload.NOTA);
+          return json({ ok:true });
+        }
+        if (String(tableCfg.sheet).toUpperCase() === 'PENJUALAN' && payload && payload.ID_NOTA) {
+          // delete related items first (restores stock), then delete penjualan row
+          deleteItemPenjualanByNota(payload.ID_NOTA);
+        }
+      }catch(e){ /* keep going to attempt delete */ }
       deleteByKey_Web(tableCfg, payload);
       return json({ ok:true });
     }
@@ -254,6 +304,145 @@ function backfillStockIfMissing() {
     if (val === '' || val === null || val === undefined) updates.push([0]); else updates.push([r[stockIdx]]);
   });
   if (updates.length) sh.getRange(2, stockIdx+1, updates.length, 1).setValues(updates);
+}
+
+// Adjust stock for a given KODE in BARANG by delta (can be negative to decrement)
+// Uses a script lock to avoid race conditions when multiple requests occur.
+function adjustStock(kodeBarang, delta) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = ssWeb();
+    const sh = ss.getSheetByName('BARANG');
+    if (!sh) throw new Error('BARANG sheet missing');
+    ensureHeaders_(sh, TABLES.barang.headers);
+    const data = sh.getDataRange().getValues();
+    const headers = data[0];
+    const kodeIdx = headers.indexOf('KODE');
+    const stockIdx = headers.indexOf('STOCK');
+    if (kodeIdx < 0 || stockIdx < 0) throw new Error('BARANG missing KODE or STOCK columns');
+    const rows = data.slice(1);
+    const idx = rows.findIndex(r => String(r[kodeIdx]) === String(kodeBarang));
+    if (idx < 0) throw new Error('Barang not found: ' + kodeBarang);
+    const cur = Number(rows[idx][stockIdx] || 0);
+    const next = Number(cur) + Number(delta);
+    if (next < 0) throw new Error('Insufficient stock for ' + kodeBarang + ' (have ' + cur + ', need ' + (cur - next) + ')');
+    sh.getRange(idx + 2, stockIdx + 1).setValue(next);
+    return next;
+  } finally {
+    try { lock.releaseLock(); } catch (e) { /* ignore */ }
+  }
+}
+
+// Delete all ITEM_PENJUALAN rows for a given NOTA and return array of {KODE_BARANG, QTY}
+function deleteItemPenjualanByNota(nota) {
+  const sh = getSheet_Web('ITEM_PENJUALAN');
+  ensureHeaders_(sh, TABLES.item_penjualan.headers);
+  const data = sh.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  const headers = data[0];
+  const notaIdx = headers.indexOf('NOTA');
+  const kodeIdx = headers.indexOf('KODE_BARANG');
+  const qtyIdx = headers.indexOf('QTY');
+  const rows = data.slice(1);
+  const toDelete = [];
+  rows.forEach((r, i) => { if (String(r[notaIdx]) === String(nota)) toDelete.push({ index: i, kode: r[kodeIdx], qty: Number(r[qtyIdx] || 0) }); });
+  // delete bottom-up and restore stock for each
+  for (let i = toDelete.length - 1; i >= 0; i--) {
+    const d = toDelete[i];
+    try { adjustStock(d.kode, Number(d.qty)); } catch (e) { /* if adjusting stock fails, still attempt deletion to keep data consistent; caller may prefer to abort earlier */ }
+    sh.deleteRow(d.index + 2);
+  }
+  return toDelete.map(d => ({ KODE_BARANG: d.kode, QTY: d.qty }));
+}
+
+/**
+ * Generate a reconciliation report in a sheet named 'STOCK_RECONCILE'.
+ * Columns: KODE, NAMA, CURRENT_STOCK, TOTAL_SOLD, PROPOSED_STOCK (CURRENT_STOCK - TOTAL_SOLD)
+ * This does NOT modify BARANG. Use applyStockFromInitial() to apply the proposed values after review.
+ */
+function computeStockReconciliation() {
+  const ss = ssMenu();
+  const shBar = ss.getSheetByName('BARANG');
+  const shItems = ss.getSheetByName('ITEM_PENJUALAN');
+  if (!shBar) throw new Error('BARANG sheet missing');
+  if (!shItems) throw new Error('ITEM_PENJUALAN sheet missing');
+  const barData = shBar.getDataRange().getValues();
+  const itemData = shItems.getDataRange().getValues();
+  if (barData.length <= 1) throw new Error('No BARANG data');
+  if (itemData.length <= 1) throw new Error('No ITEM_PENJUALAN data');
+  const barHeaders = barData[0];
+  const itemHeaders = itemData[0];
+  const kodeIdx = barHeaders.indexOf('KODE');
+  const namaIdx = barHeaders.indexOf('NAMA');
+  const stockIdx = barHeaders.indexOf('STOCK');
+  const itemKodeIdx = itemHeaders.indexOf('KODE_BARANG');
+  const itemQtyIdx = itemHeaders.indexOf('QTY');
+  if (kodeIdx < 0 || stockIdx < 0) throw new Error('BARANG headers missing KODE or STOCK');
+  if (itemKodeIdx < 0 || itemQtyIdx < 0) throw new Error('ITEM_PENJUALAN headers missing KODE_BARANG or QTY');
+
+  // compute total sold per kode
+  const sold = {};
+  itemData.slice(1).forEach(r => {
+    const k = String(r[itemKodeIdx] || '').trim();
+    const q = Number(r[itemQtyIdx] || 0);
+    if (!k) return;
+    sold[k] = (sold[k] || 0) + (isNaN(q) ? 0 : q);
+  });
+
+  // build report rows
+  const report = [['KODE','NAMA','CURRENT_STOCK','TOTAL_SOLD','PROPOSED_STOCK']];
+  barData.slice(1).forEach(r => {
+    const kode = String(r[kodeIdx] || '').trim();
+    const nama = r[namaIdx] || '';
+    const cur = Number(r[stockIdx] || 0);
+    const totalSold = sold[kode] || 0;
+    const proposed = Math.max(0, Number(cur) - Number(totalSold));
+    report.push([kode, nama, cur, totalSold, proposed]);
+  });
+
+  // write to (or create) STOCK_RECONCILE sheet
+  let shRec = ss.getSheetByName('STOCK_RECONCILE');
+  if (!shRec) shRec = ss.insertSheet('STOCK_RECONCILE');
+  shRec.clear();
+  shRec.getRange(1,1,report.length, report[0].length).setValues(report);
+  return report;
+}
+
+/**
+ * Apply proposed stock values from computeStockReconciliation() to BARANG.
+ * This will first create a backup sheet named 'BARANG_BACKUP_<timestamp>' containing the full BARANG table.
+ * Use with caution.
+ */
+function applyStockFromInitial() {
+  const ss = ssMenu();
+  const shBar = ss.getSheetByName('BARANG');
+  const shRec = ss.getSheetByName('STOCK_RECONCILE');
+  if (!shBar) throw new Error('BARANG sheet missing');
+  if (!shRec) throw new Error('STOCK_RECONCILE sheet missing — run computeStockReconciliation() first');
+  // backup BARANG
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+  const backupName = 'BARANG_BACKUP_' + timestamp;
+  shBar.copyTo(ss).setName(backupName);
+
+  // read reconcile data into map
+  const rec = shRec.getDataRange().getValues();
+  if (rec.length <= 1) throw new Error('No reconciliation data');
+  const recIdxKode = rec[0].indexOf('KODE');
+  const recIdxProposed = rec[0].indexOf('PROPOSED_STOCK');
+  const proposedMap = {};
+  rec.slice(1).forEach(r => { const k = String(r[recIdxKode]||'').trim(); proposedMap[k] = Number(r[recIdxProposed] || 0); });
+
+  // apply to BARANG stock column
+  const barData = shBar.getDataRange().getValues();
+  const headers = barData[0];
+  const kodeIdx = headers.indexOf('KODE');
+  const stockIdx = headers.indexOf('STOCK');
+  if (kodeIdx < 0 || stockIdx < 0) throw new Error('BARANG headers missing KODE or STOCK');
+  const updates = [];
+  barData.slice(1).forEach(r => { const k = String(r[kodeIdx]||'').trim(); const p = proposedMap.hasOwnProperty(k) ? proposedMap[k] : Number(r[stockIdx]||0); updates.push([p]); });
+  if (updates.length) shBar.getRange(2, stockIdx+1, updates.length, 1).setValues(updates);
+  return true;
 }
 
 function ensureHeaders_(sh, headers) {
