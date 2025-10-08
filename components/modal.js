@@ -17,7 +17,8 @@ export function createModal({ title = '', content = null, onClose = null } = {})
   const panel = document.createElement('div');
   // add horizontal margin on small screens so modal content isn't edge-to-edge
   // and make panel relative so the close button can be absolutely positioned.
-  panel.className = 'relative w-full max-w-lg mx-4 sm:mx-0 bg-surface border border-border rounded-lg shadow-sm p-4 sm:p-6 overflow-visible';
+  // increase max width so forms (like penjualan) have more room on wider screens
+  panel.className = 'relative w-full max-w-2xl mx-4 sm:mx-0 bg-surface border border-border rounded-lg shadow-sm p-4 sm:p-6 overflow-visible';
   panel.innerHTML = `<h3 class="text-lg font-semibold mb-4">${title}</h3>`;
   if (typeof content === 'string') {
     const wrapper = document.createElement('div');
