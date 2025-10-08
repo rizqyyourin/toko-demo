@@ -177,7 +177,14 @@ async function openForm(row=null){
 
     // remove button
     const tdAct = document.createElement('td'); tdAct.className='p-2';
-  const btnRem = document.createElement('button'); btnRem.type='button'; btnRem.className='px-2 py-1 bg-danger text-white rounded text-sm'; btnRem.textContent = 'Hapus'; btnRem.addEventListener('click', ()=>{ tr.remove(); computeTotals(); });
+  const btnRem = document.createElement('button');
+  btnRem.type='button';
+  // icon-only small delete button for compact mobile layout
+  btnRem.className='inline-flex items-center justify-center w-8 h-8 bg-danger text-white rounded-full hover:opacity-90';
+  btnRem.setAttribute('aria-label','Hapus item');
+  btnRem.title = 'Hapus item';
+  btnRem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M10 3h4m-7 4h10"/></svg>`;
+  btnRem.addEventListener('click', ()=>{ tr.remove(); computeTotals(); });
     tdAct.appendChild(btnRem); tr.appendChild(tdAct);
 
   // wiring: recompute totals when barang or qty changes
