@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Penjualan - Toko</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { bg: '#F8FAFC', surface: '#FFFFFF', text: '#0F172A', muted: '#64748B', border: '#E2E8F0', primary: '#6366F1', success: '#16A34A', danger: '#DC2626' } } } };
+  </script>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body class="bg-bg text-text min-h-screen">
+  <nav id="navbar" class="sticky top-0 z-20 bg-surface border-b border-border shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between py-3">
+        <div class="flex items-center gap-3">
+          <a href="../index.html" class="font-bold text-xl nav-brand text-text">Toko</a>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="hidden md:flex items-center gap-6">
+            <a href="../index.html" class="text-sm">Dashboard</a>
+            <a href="./pelanggan.html" class="text-sm">Pelanggan</a>
+            <a href="./barang.html" class="text-sm">Barang</a>
+            <a href="./penjualan.html" class="text-sm">Penjualan</a>
+            <a href="./item-penjualan.html" class="text-sm">Item Penjualan</a>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="hamburger" aria-label="Open menu" class="md:hidden p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary">☰</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="mobile-menu" class="md:hidden fixed inset-y-0 right-0 w-64 bg-surface border-l border-border transform translate-x-full transition-transform z-50" aria-hidden="true">
+      <div class="p-4 flex flex-col gap-3">
+        <a href="../index.html" class="py-2 px-2 rounded hover:bg-gray-50">Dashboard</a>
+        <a href="./pelanggan.html" class="py-2 px-2 rounded hover:bg-gray-50">Pelanggan</a>
+        <a href="./barang.html" class="py-2 px-2 rounded hover:bg-gray-50">Barang</a>
+        <a href="./penjualan.html" class="py-2 px-2 rounded hover:bg-gray-50">Penjualan</a>
+        <a href="./item-penjualan.html" class="py-2 px-2 rounded hover:bg-gray-50">Item Penjualan</a>
+      </div>
+    </div>
+  <div id="mobile-overlay" class="hidden fixed inset-0 bg-black/20 z-10" tabindex="-1"></div>
+  </nav>
+
+  <main id="container" class="max-w-4xl mx-auto px-4 py-8">
+    <section class="bg-surface border border-border rounded-md p-6">
+      <div class="mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h2 class="text-2xl font-semibold">Daftar Penjualan</h2>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            <button id="btn-refresh" class="px-3 py-2 border border-border rounded text-sm w-full sm:w-auto">Refresh</button>
+          </div>
+        </div>
+      </div>
+      <div id="list-area"></div>
+    </section>
+  </main>
+
+  <div id="toast-stack" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+  <script type="module" src="../pages/penjualan.js"></script>
+</body>
+</html>

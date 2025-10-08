@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id" class="bg-bg text-text">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toko App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#F8FAFC',
+            surface: '#FFFFFF',
+            text: '#0F172A',
+            muted: '#64748B',
+            border: '#E2E8F0',
+            primary: '#6366F1',
+            success: '#16A34A',
+            danger: '#DC2626'
+          },
+          borderRadius: {
+            sm: '0.5rem',
+            md: '0.75rem',
+            lg: '1rem',
+          },
+          boxShadow: {
+            sm: '0 1px 2px rgb(0 0 0 / 0.06)',
+            md: '0 8px 24px rgb(0 0 0 / 0.08)',
+          },
+          fontFamily: {
+            sans: ['system-ui', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
+  <link rel="stylesheet" href="./assets/styles.css">
+  </head>
+  <body class="bg-bg text-text min-h-screen">
+  <nav id="navbar" class="sticky top-0 z-20 bg-surface border-b border-border shadow-sm">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between py-3">
+          <div class="flex items-center gap-3">
+              <a href="./index.html" class="font-bold text-xl nav-brand text-text">Toko</a>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="hidden md:flex items-center gap-6">
+              <a href="./index.html" class="text-sm">Dashboard</a>
+              <a href="./pages/pelanggan.html" class="text-sm">Pelanggan</a>
+              <a href="./pages/barang.html" class="text-sm">Barang</a>
+              <a href="./pages/penjualan.html" class="text-sm">Penjualan</a>
+              <a href="./pages/item-penjualan.html" class="text-sm">Item Penjualan</a>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="hamburger" aria-label="Open menu" class="md:hidden p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary">☰</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- mobile menu -->
+      <div id="mobile-menu" class="md:hidden fixed inset-y-0 right-0 w-64 bg-surface border-l border-border transform translate-x-full transition-transform z-50" aria-hidden="true">
+        <div class="p-4 flex flex-col gap-3">
+          <a href="./index.html" class="py-2 px-2 rounded hover:bg-gray-50">Dashboard</a>
+          <a href="./pages/pelanggan.html" class="py-2 px-2 rounded hover:bg-gray-50">Pelanggan</a>
+          <a href="./pages/barang.html" class="py-2 px-2 rounded hover:bg-gray-50">Barang</a>
+            <a href="./pages/penjualan.html" class="py-2 px-2 rounded hover:bg-gray-50">Penjualan</a>
+            <a href="./pages/item-penjualan.html" class="py-2 px-2 rounded hover:bg-gray-50">Item Penjualan</a>
+        </div>
+      </div>
+  <div id="mobile-overlay" class="hidden fixed inset-0 bg-black/20 z-10" tabindex="-1"></div>
+    </nav>
+
+  <main id="container" class="mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-5xl">
+      <section class="mb-8 hero">
+        <p class="text-sm text-muted mb-1">Overview</p>
+        <h1 class="text-3xl font-extrabold">Dashboard Toko</h1>
+        <p class="text-sm text-muted mt-2">Ringkasan cepat bisnis — klik kartu untuk melanjutkan ke area yang relevan.</p>
+      </section>
+
+  <section aria-label="Dashboard cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
+        <a href="./pages/pelanggan.html" data-table="pelanggan" class="card focus-ring group bg-surface border border-border rounded-md p-4 flex items-stretch h-full hover:shadow-md transition-transform transform hover:-translate-y-0.5" role="link" aria-label="Total Pelanggan">
+          <div class="flex items-center gap-3">
+            <div class="icon bg-indigo-50 text-indigo-600 rounded-full p-2">
+              <!-- user icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A4 4 0 019 16h6a4 4 0 013.879 1.804M15 11a3 3 0 10-6 0 3 3 0 006 0z"/></svg>
+            </div>
+            <div class="ml-2">
+              <div id="count-pelanggan" class="value">—</div>
+              <div class="label text-xs text-muted mt-1">Pelanggan</div>
+            </div>
+          </div>
+        </a>
+
+        <a href="./pages/barang.html" data-table="barang" class="card focus-ring group bg-surface border border-border rounded-md p-4 flex items-stretch h-full hover:shadow-md transition-transform transform hover:-translate-y-0.5" role="link" aria-label="Total Barang">
+          <div class="flex items-center gap-3">
+            <div class="icon bg-amber-50 text-amber-600 rounded-full p-2">
+              <!-- box icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7l9-4 9 4-9 4-9-4z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 7v6a2 2 0 01-1 1.732M3 7v6a2 2 0 001 1.732M3 13l9 4 9-4"/></svg>
+            </div>
+            <div class="ml-2">
+              <div id="count-barang" class="value">—</div>
+              <div class="label text-xs text-muted mt-1">Barang</div>
+            </div>
+          </div>
+        </a>
+
+        <a href="./pages/penjualan.html" data-table="penjualan" class="card focus-ring group bg-surface border border-border rounded-md p-4 flex items-stretch h-full hover:shadow-md transition-transform transform hover:-translate-y-0.5" role="link" aria-label="Total Penjualan">
+          <div class="flex items-center gap-3">
+            <div class="icon bg-green-50 text-green-600 rounded-full p-2">
+              <!-- receipt icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6M9 16h6M21 12v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8V4h10v4"/></svg>
+            </div>
+            <div class="ml-2">
+              <div id="count-penjualan" class="value">—</div>
+              <div class="label text-xs text-muted mt-1">Penjualan</div>
+            </div>
+          </div>
+        </a>
+
+        <a href="./pages/item-penjualan.html" data-table="revenue" class="card focus-ring group bg-surface border border-border rounded-md p-4 flex items-stretch h-full hover:shadow-md transition-transform transform hover:-translate-y-0.5" role="link" aria-label="Total Penghasilan">
+          <div class="flex items-center gap-3">
+            <div class="icon bg-purple-50 text-purple-600 rounded-full p-2 flex items-center justify-center">
+              <!-- clear currency badge -->
+              <span class="text-sm font-semibold">Rp</span>
+            </div>
+            <div class="ml-2">
+              <div id="count-revenue" class="value">—</div>
+              <div class="label text-xs text-muted mt-1">Penghasilan</div>
+            </div>
+          </div>
+        </a>
+      </section>
+    </main>
+    <script type="module" src="./pages/index.js"></script>
+
+  <div id="toast-stack" class="fixed bottom-4 right-4 z-70 flex flex-col gap-2"></div>
+
+  <!-- nav is initialized from page modules via components/nav.js -->
+  </body>
+</html>
