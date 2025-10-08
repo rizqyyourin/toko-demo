@@ -52,7 +52,16 @@ async function renderList(items) {
     { label: 'NAMA', field: 'NAMA', sortable: true, render: (v)=>{ const d=document.createElement('div'); d.className='truncate max-w-[220px]'; d.textContent=v; d.title=v; return d; } },
     { label: 'KATEGORI', field: 'KATEGORI', class: 'w-36', sortable: true },
   { label: 'HARGA', field: 'HARGA', class: 'w-28', tdClass: 'text-right', sortable: true, render: (v)=>{ const d=document.createElement('div'); d.className='text-right'; d.textContent = 'Rp ' + currencyFmt.format(Number(v||0)); return d; } },
-  { label: 'STOCK', field: 'STOCK', class: 'w-20 text-center', tdClass: 'text-center', sortable: true },
+  { label: 'STOCK', field: 'STOCK', class: 'w-20 text-center', tdClass: 'text-center', sortable: true, render: (v)=>{
+      const wrap = document.createElement('div');
+      const val = (v === undefined || v === null || String(v).trim() === '') ? 0 : Number(v);
+      if (!val || Number(val) <= 0) {
+        const badge = document.createElement('span'); badge.className = 'inline-block px-2 py-1 text-xs text-danger border border-danger rounded'; badge.textContent = 'kosong'; wrap.appendChild(badge);
+      } else {
+        const d = document.createElement('div'); d.className='text-center font-mono'; d.textContent = String(Number(val)); wrap.appendChild(d);
+      }
+      return wrap;
+    } },
     { label: 'Aksi', field: '__actions', class: 'w-36', tdClass: 'w-36', render: (_, row) => {
       const wrap = document.createElement('div'); wrap.className='flex gap-2';
       const edit = document.createElement('button'); edit.className='px-2 py-1 bg-primary text-white rounded text-sm'; edit.textContent='Edit'; edit.addEventListener('click', ()=> openForm(row));
