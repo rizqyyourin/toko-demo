@@ -150,9 +150,14 @@ async function openForm(row=null){
   // narrower dropdown so it doesn't steal space from qty on small screens
   const sel = document.createElement('select'); sel.className='border border-border rounded px-2 py-1 it-barang bg-white text-text w-28 sm:w-40';
     const none = document.createElement('option'); none.value=''; none.textContent='-- pilih barang --'; sel.appendChild(none);
-  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); if(b.STOCK != null) o.dataset.stock = String(b.STOCK); sel.appendChild(o); });
+  barangList.forEach(b=>{ const o=document.createElement('option'); o.value = b.KODE || b.KODE_BARANG || b.KODE; o.textContent = b.NAMA || o.value; o.dataset.harga = String(b.HARGA || 0); if(b.STOCK != null) o.dataset.stock = String(b.STOCK); // mark sold-out
+      try{ const sVal = (b.STOCK === undefined || b.STOCK === null) ? null : Number(b.STOCK); if(sVal !== null && !isNaN(sVal) && sVal <= 0){ o.disabled = true; o.textContent = (o.textContent || '') + ' (Habis)'; } }catch(e){}
+    sel.appendChild(o); });
     if(data.KODE_BARANG) sel.value = data.KODE_BARANG || data.KODE;
-  tdBarang.appendChild(sel); tr.appendChild(tdBarang);
+  // helper small message area under select for stock hints
+  const hintWrap = document.createElement('div'); hintWrap.className = 'mt-1';
+  const hint = document.createElement('div'); hint.className = 'text-xs text-danger hidden'; hint.textContent = 'Stok kosong'; hintWrap.appendChild(hint);
+  tdBarang.appendChild(sel); tdBarang.appendChild(hintWrap); tr.appendChild(tdBarang);
   // attach per-row HARGA as data attribute for fallback when barang list changes
   try{
     let initialPrice = null;
@@ -191,14 +196,20 @@ async function openForm(row=null){
     tdAct.appendChild(btnRem); tr.appendChild(tdAct);
 
   // wiring: recompute totals when barang or qty changes
-  sel.addEventListener('change', ()=>{
+    sel.addEventListener('change', ()=>{
     // when user changes selected barang, clear any per-row stored harga (use option dataset instead)
     try{ delete tr.dataset.harga; }catch(e){}
-    // set qty max from selected option's data-stock (if available)
+    // set qty max from selected option's data-stock (if available) and show hint when sold out
     try{
       const opt = sel.selectedOptions && sel.selectedOptions[0] || sel.options[sel.selectedIndex];
-      const stockVal = opt && opt.dataset && opt.dataset.stock ? Number(opt.dataset.stock) : null;
-      const qtyEl = tr.querySelector('.it-qty'); if(qtyEl && stockVal !== null){ qtyEl.max = String(stockVal); }
+      const stockVal = (opt && opt.dataset && opt.dataset.stock !== undefined && String(opt.dataset.stock).trim() !== '') ? Number(opt.dataset.stock) : null;
+      const qtyEl = tr.querySelector('.it-qty');
+      if(qtyEl){
+        if(stockVal !== null){ qtyEl.max = String(stockVal); } else { qtyEl.removeAttribute('max'); }
+        // if stock is zero or less, disable qty and show hint
+        if(stockVal !== null && !isNaN(stockVal) && stockVal <= 0){ try{ qtyEl.value = '0'; qtyEl.disabled = true; }catch(e){} try{ hint.classList.remove('hidden'); }catch(e){} }
+        else { try{ if(qtyEl.disabled) qtyEl.disabled = false; }catch(e){} try{ hint.classList.add('hidden'); }catch(e){} }
+      }
     }catch(e){}
     computeTotals();
   });
