@@ -245,24 +245,69 @@ function renderYearlySalesChart(data){
     chartBox.innerHTML = '';
     const months = computeMonthlyTotals(year);
     const max = Math.max(1, ...months);
-    const w = 720; const h = 260; const leftAxisW = 88; const bottomH = 36; const chartW = w - leftAxisW - 24; const chartH = h - bottomH - 24;
+    const w = 900; const h = 320; const leftAxisW = 96; const bottomH = 48; const chartW = w - leftAxisW - 28; const chartH = h - bottomH - 28;
     const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width','100%'); svg.setAttribute('height','260');
-    // left axis
-  const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(12,12)`);
-  for(let i=0;i<=4;i++){ const y = (chartH) * (i/4); const val = Math.round(max * (1 - i/4)); const ty = y + 6; const t = document.createElementNS(svgNS,'text'); t.setAttribute('x',0); t.setAttribute('y', ty); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.textContent = formatCurrency(val); axis.appendChild(t); }
+    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width','100%'); svg.setAttribute('height', String(h));
+
+    // helper: compact currency (Rp 1.2jt, Rp 3rb)
+    function compactCurrency(n){
+      const v = Number(n||0);
+      if (v >= 1000000) return 'Rp ' + (v/1000000).toFixed(v%1000000===0?0:1) + 'jt';
+      if (v >= 1000) return 'Rp ' + (v/1000).toFixed(v%1000===0?0:1) + 'rb';
+      return 'Rp ' + v.toLocaleString('id-ID');
+    }
+
+    // background grid + left axis ticks
+    const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(${leftAxisW-8},12)`);
+    const ticks = 4; for(let i=0;i<=ticks;i++){
+      const tRatio = i / ticks; const y = Math.round(tRatio * chartH);
+      const val = Math.round((1 - tRatio) * max);
+      // grid line
+      const line = document.createElementNS(svgNS,'line'); line.setAttribute('x1',0); line.setAttribute('y1', y); line.setAttribute('x2', chartW); line.setAttribute('y2', y); line.setAttribute('stroke', '#e6e9ef'); line.setAttribute('stroke-width','1'); axis.appendChild(line);
+      // tick label
+      const t = document.createElementNS(svgNS,'text'); t.setAttribute('x', -8); t.setAttribute('y', y + 4); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.setAttribute('text-anchor','end'); t.textContent = compactCurrency(val); axis.appendChild(t);
+    }
     svg.appendChild(axis);
+
+    // tooltip overlay
+    const tooltip = document.createElement('div'); tooltip.style.position='absolute'; tooltip.style.pointerEvents='none'; tooltip.style.padding='6px 8px'; tooltip.style.background='rgba(17,24,39,0.9)'; tooltip.style.color='#fff'; tooltip.style.fontSize='12px'; tooltip.style.borderRadius='6px'; tooltip.style.display='none'; tooltip.style.zIndex='60'; document.body.appendChild(tooltip);
+
+    // bars group
     const bars = document.createElementNS(svgNS,'g'); bars.setAttribute('transform', `translate(${leftAxisW},12)`);
-    const band = chartW / 12; const barW = band * 0.64; const gap = band - barW;
+    const band = chartW / 12; const barW = Math.max(14, band * 0.6); const gap = band - barW;
     months.forEach((m, idx)=>{
       const x = idx * band + gap/2;
       const hBar = (max === 0) ? 0 : (m / max) * chartH;
       const y = chartH - hBar;
-      const rect = document.createElementNS(svgNS,'rect'); rect.setAttribute('x', x); rect.setAttribute('y', y); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(hBar)); rect.setAttribute('fill', '#6366f1'); rect.setAttribute('rx','4'); bars.appendChild(rect);
-      const lbl = document.createElementNS(svgNS,'text'); lbl.setAttribute('x', x + barW/2); lbl.setAttribute('y', chartH + 18); lbl.setAttribute('font-size','12'); lbl.setAttribute('fill','#374151'); lbl.setAttribute('text-anchor','middle'); lbl.textContent = monthName(idx); bars.appendChild(lbl);
+      const rect = document.createElementNS(svgNS,'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', chartH); // start at bottom for animation
+      rect.setAttribute('width', String(barW));
+      rect.setAttribute('height', '0');
+      rect.setAttribute('fill', '#4f46e5'); rect.setAttribute('rx','6'); rect.setAttribute('aria-label', `${monthName(idx)}: ${formatCurrency(m)}`);
+      bars.appendChild(rect);
+
+      // value label (hidden until hover or after animate)
+      const vlabel = document.createElementNS(svgNS,'text'); vlabel.setAttribute('x', x + barW/2); vlabel.setAttribute('y', chartH - hBar - 8); vlabel.setAttribute('font-size','12'); vlabel.setAttribute('fill','#0f172a'); vlabel.setAttribute('text-anchor','middle'); vlabel.textContent = compactCurrency(m); vlabel.style.opacity = '0.0'; bars.appendChild(vlabel);
+
+      // month label
+      const lbl = document.createElementNS(svgNS,'text'); lbl.setAttribute('x', x + barW/2); lbl.setAttribute('y', chartH + 20); lbl.setAttribute('font-size','12'); lbl.setAttribute('fill','#6b7280'); lbl.setAttribute('text-anchor','middle'); lbl.textContent = monthName(idx); bars.appendChild(lbl);
+
+      // hover events
+      rect.addEventListener('mouseenter', (ev)=>{ tooltip.style.display='block'; tooltip.textContent = `${monthName(idx)} — ${formatCurrency(m)}`; vlabel.style.opacity='1'; rect.setAttribute('fill','#3730a3'); });
+      rect.addEventListener('mousemove', (ev)=>{ tooltip.style.left = (ev.pageX + 12) + 'px'; tooltip.style.top = (ev.pageY + 12) + 'px'; });
+      rect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; vlabel.style.opacity='0'; rect.setAttribute('fill','#4f46e5'); });
+
+      // simple animation: grow height from 0 to hBar
+      requestAnimationFrame(()=>{
+        rect.setAttribute('y', String(y));
+        rect.setAttribute('height', String(hBar));
+      });
     });
     svg.appendChild(bars);
     chartBox.appendChild(svg);
+    // remove tooltip when navigating away
+    setTimeout(()=>{ try{ if(tooltip && tooltip.parentNode) {} }catch(e){} }, 0);
   }
 
   sel.addEventListener('change', ()=> draw(sel.value));
