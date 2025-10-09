@@ -455,20 +455,26 @@ export async function load() {
       const itRes = await getList('item_penjualan');
       const items = itRes.data || [];
       const itemsByNota = {};
-      function parseNumber(v){ if (v==null || v==='') return 0; if(typeof v === 'number') return v; const s=String(v).replace(/[^0-9\-\.\,]/g,''); if(!s) return 0; const n = Number(s.replace(/,/g,'')); return isNaN(n)?0:n; }
+      function parseNumber(v){ if (v==null || v==='') return 0; if(typeof v === 'number') return v; let s=String(v).trim(); s = s.replace(/[^0-9.,-]/g,''); if(!s) return 0; const lastDot = s.lastIndexOf('.'); const lastComma = s.lastIndexOf(','); if(lastComma>lastDot){ s = s.replace(/\./g,'').replace(',','.'); } else { s = s.replace(/,/g,''); } const n = Number(s); return isNaN(n)?0:n; }
+      function normalizeNota(x){ if(x==null) return ''; const s = String(x).trim().toLowerCase(); const cleaned = s.replace(/^(inv|nota|no|no\.|np)\s*/i,'').replace(/[^0-9a-z]/g,''); return cleaned || s.replace(/[^0-9a-z]/g,''); }
       items.forEach(it=>{
-        const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '').trim();
+        const raw = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
+        const nota = normalizeNota(raw);
         if(!nota) return;
         const sub = parseNumber(it.SUBTOTAL || it.SUB_TOTAL || (Number(it.QTY||0) * Number(it.HARGA||0)) || 0);
         itemsByNota[nota] = (itemsByNota[nota] || 0) + (sub || 0);
       });
-      // override data rows' SUBTOTAL when items exist for that nota
+      // override data rows' SUBTOTAL when items exist for that nota; collect mismatches for debug
+      const mismatches = [];
       data.forEach(d => {
-        const nota = String(d.ID_NOTA || d.NOTA || d.ID || '').trim();
-        if(nota && itemsByNota[nota]){
-          d.SUBTOTAL = itemsByNota[nota];
-        }
+        const raw = d.ID_NOTA || d.NOTA || d.ID || '';
+        const nota = normalizeNota(raw);
+        const itemsSum = itemsByNota[nota] || 0;
+        const penSub = parseNumber(d.SUBTOTAL || d.SUB_TOTAL || d.TOTAL || 0);
+        if(itemsSum && itemsSum !== penSub){ mismatches.push({ nota: String(raw), notaKey: nota, penjualan: penSub, itemsSum }); }
+        if(nota && itemsSum){ d.SUBTOTAL = itemsSum; }
       });
+      if(mismatches.length){ console.debug('[page:penjualan] subtotal mismatches (penjualan vs item_penjualan)', mismatches.slice(0,50)); }
     }catch(e){ console.warn('[page:penjualan] failed to reconcile item_penjualan subtotals', e); }
 
     // also fetch pelanggan for name lookup in the KODE_PELANGGAN column
