@@ -15,34 +15,56 @@ function formatCurrency(n){
 
 // charting and revenue helpers removed (charts cleaned up)
 
-async function loadCard(m) {
-  const el = document.getElementById(m.id);
-  if (!el) return;
-  el.textContent = '…';
-  try {
-    const res = await getList(m.table);
-    console.debug('[page:index] loadCard', m.table, 'fromCache=', !!res.fromCache);
-    const rows = res.data || [];
-      if (m.type === 'count') el.textContent = rows.length.toString();
-      else if (m.type === 'sum') {
-        try{
-          // For revenue card we prefer computing total from item_penjualan and barang prices
-          // This avoids mismatches when penjualan.SUBTOTAL is stale or computed differently.
-          if (m.id === 'count-revenue'){
-            const itemsRes = await getList('item_penjualan', { useCache: false }); const items = itemsRes.data || [];
-            const bres = await getList('barang', { useCache: false }); const bl = (bres.data||[]);
-            const priceMap = {}; bl.forEach(b => { const k = b.KODE || b.KODE_BARANG || ''; priceMap[k] = Number(b.HARGA||0); });
-            const total = items.reduce((s,it)=>{ const qty = Number(it.QTY||0); const sub = Number(it.SUBTOTAL||0); if(sub && sub>0) return s + sub; const p = priceMap[it.KODE_BARANG||it.KODE] || Number(it.HARGA||0); return s + (qty * (p||0)); }, 0);
-            el.textContent = total && total>0 ? formatCurrency(total) : '—';
-          } else {
-            const sum = rows.reduce((s,r)=> s + (Number(r[m.field])||0), 0);
-            el.textContent = sum && sum>0 ? formatCurrency(sum) : '—';
-          }
-        }catch(e){ el.textContent = '—'; }
+// Single-fetch loader for dashboard: fetch required tables once and compute all card values
+async function loadDashboardData(){
+  // show placeholders
+  document.getElementById('count-pelanggan') && (document.getElementById('count-pelanggan').textContent = '…');
+  document.getElementById('count-barang') && (document.getElementById('count-barang').textContent = '…');
+  document.getElementById('count-penjualan') && (document.getElementById('count-penjualan').textContent = '…');
+  document.getElementById('count-revenue') && (document.getElementById('count-revenue').textContent = '…');
+
+  try{
+    // Fetch all needed tables in parallel, deduped by service layer
+    const [pelRes, barRes, penRes, itemsRes] = await Promise.all([
+      getList('pelanggan'),
+      getList('barang'),
+      getList('penjualan'),
+      getList('item_penjualan')
+    ]);
+    const pelanggan = pelRes.data || [];
+    const barang = barRes.data || [];
+    const penjualan = penRes.data || [];
+    const items = itemsRes.data || [];
+
+    // counts
+    const elP = document.getElementById('count-pelanggan'); if (elP) elP.textContent = String(pelanggan.length || 0);
+    const elB = document.getElementById('count-barang'); if (elB) elB.textContent = String(barang.length || 0);
+    const elS = document.getElementById('count-penjualan'); if (elS) elS.textContent = String(penjualan.length || 0);
+
+    // total revenue: prefer penjualan.SUBTOTAL, fallback to items grouping
+    let totalRevenue = 0;
+    // build itemsByNota map
+    const itemsByNota = {};
+    items.forEach(it => { const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || ''); if(!nota) return; (itemsByNota[nota] = itemsByNota[nota] || []).push(it); });
+    penjualan.forEach(p => {
+      let sub = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
+      if (!sub || sub <= 0){
+        const nota = String(p.NOTA || p.NOMOR || p.NO || '');
+        const its = itemsByNota[nota] || [];
+        sub = its.reduce((s,it) => s + (Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0), 0);
       }
-  } catch (err) {
-    el.textContent = '—';
-    showToast('Gagal memuat ringkasan', { duration: 1400 });
+      totalRevenue += sub || 0;
+    });
+    const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
+
+    return { pelanggan, barang, penjualan, items, totalRevenue };
+  }catch(e){
+    console.error('[page:index] loadDashboardData error', e);
+    showToast('Gagal memuat data dashboard', { duration: 2500 });
+    // fill with safe defaults
+    const els = ['count-pelanggan','count-barang','count-penjualan','count-revenue'];
+    els.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+    return { pelanggan:[], barang:[], penjualan:[], items:[], totalRevenue:0 };
   }
 }
 
@@ -58,8 +80,8 @@ export default async function initDashboard(){
     }catch(e){}
   });
 
-  // load all cards in parallel
-  await Promise.all(mappings.map(m => loadCard(m)));
+  // load dashboard data (single-fetch for required tables) and render cards
+  await loadDashboardData();
 
   // make cards keyboard-activatable
   document.querySelectorAll('.card').forEach(card=>{
