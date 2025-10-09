@@ -91,11 +91,11 @@
             <div class="flex items-center justify-between mb-2">
               <div>
                 <h3 class="text-sm font-medium">Penghasilan</h3>
-                <div class="text-xs text-muted">Urutkan per hari/minggu/bulan/tahun</div>
               </div>
               <div class="flex items-center gap-2">
-                <label for="revenue-year" class="sr-only">Tahun</label>
-                <input id="revenue-year" type="number" min="2000" max="2100" class="text-sm border border-border rounded-md bg-white px-2 py-1 w-28" aria-label="Pilih tahun" />
+                <button id="prev-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">◀</button>
+                <div id="year-display" class="text-sm font-medium px-3" role="status" aria-live="polite"></div>
+                <button id="next-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">▶</button>
               </div>
             </div>
             <div id="revenue-chart" class="w-full flex-1"></div>

@@ -82,18 +82,19 @@ export default async function initDashboard(){
       // also initialize revenue chart if present
       const revenueEl = document.getElementById('revenue-chart');
       if (revenueEl) {
-        const yearInput = document.getElementById('revenue-year');
-        const currentYear = new Date().getFullYear();
-        if (yearInput) {
-          yearInput.value = String(currentYear);
-          yearInput.addEventListener('change', () => renderRevenuePerMonth(revenueEl, Number(yearInput.value) || currentYear));
-          // allow mouse wheel to increment/decrement year when focused
-          yearInput.addEventListener('wheel', (e) => { e.preventDefault(); const v = Number(yearInput.value) || currentYear; yearInput.value = String(v + (e.deltaY > 0 ? -1 : 1)); yearInput.dispatchEvent(new Event('change')); });
-        }
-        renderRevenuePerMonth(revenueEl, currentYear);
+        const prevBtn = document.getElementById('prev-year');
+        const nextBtn = document.getElementById('next-year');
+        const yearDisplay = document.getElementById('year-display');
+        let currentYear = new Date().getFullYear();
+        function setYear(y){ currentYear = Number(y) || currentYear; if(yearDisplay) yearDisplay.textContent = String(currentYear); renderRevenuePerMonth(revenueEl, currentYear); }
+        if (prevBtn) prevBtn.addEventListener('click', ()=> setYear(currentYear - 1));
+        if (nextBtn) nextBtn.addEventListener('click', ()=> setYear(currentYear + 1));
+        // support keyboard +/- on the year display for accessibility
+        if (yearDisplay) { yearDisplay.tabIndex = 0; yearDisplay.addEventListener('keydown', (e)=>{ if (e.key === 'ArrowLeft') setYear(currentYear - 1); else if (e.key === 'ArrowRight') setYear(currentYear + 1); }); }
+        setYear(currentYear);
         // re-render on resize
         let rt;
-        window.addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=> renderRevenuePerMonth(revenueEl, Number(yearInput && yearInput.value) || currentYear), 200); });
+        window.addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=> renderRevenuePerMonth(revenueEl, currentYear), 200); });
       }
       // re-render on resize
       let t;
@@ -207,15 +208,44 @@ async function renderRevenuePerMonth(container, year){
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     const max = Math.max(...months.map(m => m.value), 1);
-    const padLeft = 48; const padRight = 16; const chartW = width - padLeft - padRight;
-    const barW = Math.floor(chartW / 12) - 8;
-    months.forEach((m, i) => {
-      const x = padLeft + i * (barW + 8);
-      const h = Math.round((m.value / max) * (height - 40));
-      const y = height - h - 24;
-      const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', String(x)); rect.setAttribute('y', String(y)); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(h)); rect.setAttribute('fill', '#6366F1'); rect.setAttribute('rx','4'); svg.appendChild(rect);
-      const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', String(x + barW/2)); label.setAttribute('y', String(height - 6)); label.setAttribute('font-size','11'); label.setAttribute('fill','#475569'); label.setAttribute('text-anchor','middle'); label.textContent = String(i+1); svg.appendChild(label);
+    const padLeft = 72; const padRight = 16; const padTop = 8; const padBottom = 36;
+    const chartW = width - padLeft - padRight;
+    const chartH = height - padTop - padBottom;
+    const barGap = 8;
+    const barW = Math.floor(chartW / 12) - barGap;
+
+    // draw y-axis ticks (rupiah) - 4 ticks: 0, 1/3, 2/3, maxRound
+    const ticks = 4;
+    const tickVals = [];
+    for(let i=0;i<ticks;i++){ tickVals.push(Math.round((max * i) / (ticks-1))); }
+    // round tick values to nearest nice number (e.g., 1000/10000)
+    const nice = (v) => {
+      if (v <= 0) return 0;
+      const pow = Math.pow(10, Math.max(0, Math.floor(Math.log10(v)) - 2));
+      return Math.round(v / pow) * pow;
+    };
+    const niceMax = nice(max) || max;
+    const niceTicks = [];
+    for(let i=0;i<ticks;i++){ niceTicks.push(Math.round((niceMax * i) / (ticks-1))); }
+
+    // grid lines and tick labels
+    niceTicks.forEach((tv, idx) => {
+      const y = padTop + Math.round(chartH - (tv / niceMax) * chartH);
+      // horizontal grid
+      const line = document.createElementNS(svgNS, 'line'); line.setAttribute('x1', String(padLeft)); line.setAttribute('x2', String(width - padRight)); line.setAttribute('y1', String(y)); line.setAttribute('y2', String(y)); line.setAttribute('stroke', 'rgba(15,23,42,0.06)'); line.setAttribute('stroke-width','1'); svg.appendChild(line);
+      const txt = document.createElementNS(svgNS, 'text'); txt.setAttribute('x','8'); txt.setAttribute('y', String(y + 4)); txt.setAttribute('font-size','11'); txt.setAttribute('fill','#475569'); txt.textContent = formatCurrency(tv); svg.appendChild(txt);
     });
+
+    // bars and month labels (Indonesian short names)
+    const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    months.forEach((m, i) => {
+      const x = padLeft + i * (barW + barGap);
+      const h = Math.round((m.value / niceMax) * chartH);
+      const y = padTop + (chartH - h);
+      const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', String(x)); rect.setAttribute('y', String(y)); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(h)); rect.setAttribute('fill', '#6366F1'); rect.setAttribute('rx','4'); svg.appendChild(rect);
+      const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', String(x + barW/2)); label.setAttribute('y', String(height - 10)); label.setAttribute('font-size','11'); label.setAttribute('fill','#475569'); label.setAttribute('text-anchor','middle'); label.textContent = monthNames[i]; svg.appendChild(label);
+    });
+
     // top-left summary
     const title = document.createElementNS(svgNS, 'text'); title.setAttribute('x','6'); title.setAttribute('y','14'); title.setAttribute('font-size','13'); title.setAttribute('fill','#0F172A'); title.setAttribute('font-weight','600'); title.textContent = `Penghasilan ${year}`; svg.appendChild(title);
     const totalText = document.createElementNS(svgNS, 'text'); totalText.setAttribute('x','6'); totalText.setAttribute('y','32'); totalText.setAttribute('font-size','12'); totalText.setAttribute('fill','#475569'); totalText.textContent = formatCurrency(total); svg.appendChild(totalText);
