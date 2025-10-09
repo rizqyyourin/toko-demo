@@ -223,6 +223,28 @@ function doPost(e) {
       // or deleting a penjualan (which should remove its items), restore stock accordingly.
       try{
         if (String(tableCfg.sheet).toUpperCase() === 'ITEM_PENJUALAN' && payload && payload.NOTA) {
+          // if payload contains both NOTA and KODE_BARANG, treat as single-item delete and restore that qty
+          if (payload.KODE_BARANG) {
+            // find the existing row to get QTY
+            const sh = getSheet_Web('ITEM_PENJUALAN');
+            ensureHeaders_(sh, TABLES.item_penjualan.headers);
+            const data = sh.getDataRange().getValues();
+            if (data.length > 1) {
+              const headers = data[0];
+              const rows = data.slice(1);
+              const notaIdx = headers.indexOf('NOTA');
+              const kodeIdx = headers.indexOf('KODE_BARANG');
+              const qtyIdx = headers.indexOf('QTY');
+              const idx = rows.findIndex(r => String(r[notaIdx]) === String(payload.NOTA) && String(r[kodeIdx]) === String(payload.KODE_BARANG));
+              if (idx >= 0) {
+                const qty = Number(rows[idx][qtyIdx] || 0);
+                try { if (qty && qty > 0) adjustStock(payload.KODE_BARANG, Number(qty)); } catch(e) { /* ignore */ }
+              }
+            }
+            // delete the single row
+            deleteByKey_Web(tableCfg, payload);
+            return json({ ok:true });
+          }
           // delete all item_penjualan rows for this nota and restore stock
           deleteItemPenjualanByNota(payload.NOTA);
           return json({ ok:true });
@@ -232,6 +254,36 @@ function doPost(e) {
           deleteItemPenjualanByNota(payload.ID_NOTA);
         }
       }catch(e){ /* keep going to attempt delete */ }
+      // Prevent deleting BARANG if it's referenced by any ITEM_PENJUALAN
+      if (String(tableCfg.sheet).toUpperCase() === 'BARANG' && payload && payload.KODE) {
+        try {
+          const shItems = getSheet_Web('ITEM_PENJUALAN');
+          ensureHeaders_(shItems, TABLES.item_penjualan.headers);
+          const itemData = shItems.getDataRange().getValues();
+          if (itemData.length > 1) {
+            const headers = itemData[0];
+            const kodeIdx = headers.indexOf('KODE_BARANG');
+            const rows = itemData.slice(1);
+            const found = rows.some(r => String(r[kodeIdx]) === String(payload.KODE));
+            if (found) return json({ ok:false, error: 'Cannot delete barang: referenced in item_penjualan' }, 409);
+          }
+        } catch(e) { /* ignore and proceed to attempt delete */ }
+      }
+      // Prevent deleting PELANGGAN if it's referenced by any PENJUALAN
+      if (String(tableCfg.sheet).toUpperCase() === 'PELANGGAN' && payload && payload.ID_PELANGGAN) {
+        try {
+          const shPen = getSheet_Web('PENJUALAN');
+          ensureHeaders_(shPen, TABLES.penjualan.headers);
+          const penData = shPen.getDataRange().getValues();
+          if (penData.length > 1) {
+            const headers = penData[0];
+            const kodeIdx = headers.indexOf('KODE_PELANGGAN');
+            const rows = penData.slice(1);
+            const found = rows.some(r => String(r[kodeIdx]) === String(payload.ID_PELANGGAN));
+            if (found) return json({ ok:false, error: 'Cannot delete pelanggan: referenced in penjualan' }, 409);
+          }
+        } catch(e) { /* ignore and proceed to attempt delete */ }
+      }
       deleteByKey_Web(tableCfg, payload);
       return json({ ok:true });
     }

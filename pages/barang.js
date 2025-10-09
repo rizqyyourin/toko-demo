@@ -47,6 +47,13 @@ async function renderList(items) {
   btnReset.addEventListener('click', ()=>{ input.value=''; state.query=''; state.page=1; applyFilterSort(); });
   try{ input.focus(); }catch(e){}
 
+  // fetch referenced item_penjualan keys so delete buttons can be disabled for integrity
+  let referencedBarang = new Set();
+  try{
+    const itemsRes = await getList('item_penjualan');
+    (itemsRes.data || []).forEach(it => { if (it && it.KODE_BARANG) referencedBarang.add(String(it.KODE_BARANG)); });
+  }catch(e){ console.warn('[page:barang] failed to load item_penjualan for delete protection', e); }
+
   const cols = [
     { label: 'KODE', field: 'KODE', class: 'w-36', tdClass: 'font-mono', sortable: true },
     { label: 'NAMA', field: 'NAMA', sortable: true, render: (v)=>{ const d=document.createElement('div'); d.className='truncate max-w-[220px]'; d.textContent=v; d.title=v; return d; } },
@@ -66,9 +73,9 @@ async function renderList(items) {
       const wrap = document.createElement('div'); wrap.className='flex gap-2';
       const edit = document.createElement('button'); edit.className='px-2 py-1 bg-primary text-white rounded text-sm'; edit.textContent='Edit'; edit.addEventListener('click', ()=> openForm(row));
       const del = document.createElement('button'); del.className='px-2 py-1 bg-danger text-white rounded text-sm'; del.textContent='Hapus';
-      del.addEventListener('click', async ()=>{ if(!confirm('Hapus barang ini?')) return; try{ await remove('barang',{KODE: row.KODE}); showToast('Barang dihapus'); await load(); }catch(e){ console.error(e); showToast('Gagal menghapus'); }});
-  // notify other pages about change
-  // removed cross-tab broadcast to avoid unexpected auto-refresh behavior
+      // if referenced, disable deletion and show explanation
+      if(referencedBarang.has(String(row.KODE))){ del.disabled = true; del.title = 'Tidak bisa dihapus — barang sudah digunakan di item penjualan'; del.classList.add('opacity-60','cursor-not-allowed'); }
+      else { del.addEventListener('click', async ()=>{ if(!confirm('Hapus barang ini?')) return; try{ await remove('barang',{KODE: row.KODE}); showToast('Barang dihapus'); await load(); }catch(e){ console.error(e); showToast('Gagal menghapus'); }}); }
       wrap.appendChild(edit); wrap.appendChild(del); return wrap;
     } }
   ];

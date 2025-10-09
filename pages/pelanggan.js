@@ -64,6 +64,13 @@ async function renderList(items) {
   btnReset.addEventListener('click', ()=>{ input.value = ''; state.query = ''; state.page = 1; applyFilterSort(); });
   // focus input for immediate typing
   try { input.focus(); } catch(e) {}
+
+  // fetch referenced penjualan keys so delete buttons can be disabled for integrity
+  let referencedPelanggan = new Set();
+  try{
+    const penRes = await getList('penjualan');
+    (penRes.data || []).forEach(p => { if (p && p.KODE_PELANGGAN) referencedPelanggan.add(String(p.KODE_PELANGGAN)); });
+  }catch(e){ console.warn('[page:pelanggan] failed to load penjualan for delete protection', e); }
   const cols = [
     { label: 'ID Pelanggan', field: 'ID_PELANGGAN', class: 'w-32', tdClass: 'font-mono', sortable: true },
     { label: 'Nama', field: 'NAMA', class: '', tdClass: '', sortable: true, render: (v) => { const d = document.createElement('div'); d.className = 'truncate max-w-[180px] md:max-w-[280px]'; d.textContent = v; d.title = v; return d; } },
@@ -79,17 +86,21 @@ async function renderList(items) {
       const del = document.createElement('button');
       del.className = 'px-2 py-1 bg-danger text-white rounded text-sm';
       del.textContent = 'Hapus';
-      del.addEventListener('click', async () => {
-        if (!confirm('Hapus pelanggan ini?')) return;
-        try {
-          await remove('pelanggan', { ID_PELANGGAN: row.ID_PELANGGAN });
-          showToast('Pelanggan dihapus', { duration: 1400 });
-          await load();
-        } catch (e) {
-          console.error('[page:pelanggan] delete error', e);
-          showToast('Gagal menghapus', { duration: 1400 });
-        }
-      });
+      // disable deletion if referenced in penjualan
+      if(referencedPelanggan.has(String(row.ID_PELANGGAN))){ del.disabled = true; del.title = 'Tidak bisa dihapus — pelanggan sudah digunakan di penjualan'; del.classList.add('opacity-60','cursor-not-allowed'); }
+      else {
+        del.addEventListener('click', async () => {
+          if (!confirm('Hapus pelanggan ini?')) return;
+          try {
+            await remove('pelanggan', { ID_PELANGGAN: row.ID_PELANGGAN });
+            showToast('Pelanggan dihapus', { duration: 1400 });
+            await load();
+          } catch (e) {
+            console.error('[page:pelanggan] delete error', e);
+            showToast('Gagal menghapus', { duration: 1400 });
+          }
+        });
+      }
       wrap.appendChild(edit);
       wrap.appendChild(del);
       return wrap;

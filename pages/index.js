@@ -64,6 +64,51 @@ export default async function initDashboard(){
     card.setAttribute('tabindex','0');
     card.addEventListener('keydown', (e)=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
   });
+
+  // render stock per category chart
+  try{
+    const chartEl = document.getElementById('stock-chart');
+    if(chartEl){
+      const res = await getList('barang', { useCache: false });
+      const rows = res.data || [];
+      const byCat = {};
+      rows.forEach(r => {
+        const k = (r.KATEGORI || '—').toString() || '—';
+        const s = Number(r.STOCK || 0) || 0;
+        byCat[k] = (byCat[k] || 0) + s;
+      });
+      const data = Object.keys(byCat).map(cat => ({ kategori: cat, stock: byCat[cat] })).sort((a,b)=> b.stock - a.stock);
+      renderStockChart(chartEl, data);
+      // re-render on resize
+      let t;
+      window.addEventListener('resize', ()=>{ clearTimeout(t); t = setTimeout(()=> renderStockChart(chartEl, data), 150); });
+    }
+  }catch(e){ console.warn('[page:index] failed to render stock chart', e); }
+}
+
+function renderStockChart(container, data){
+  // simple horizontal bar chart using SVG
+  container.innerHTML = '';
+  if(!data || !data.length){ container.innerHTML = '<div class="text-muted">Tidak ada data stok.</div>'; return; }
+  const width = container.clientWidth || 600;
+  const height = container.clientHeight || Math.max(200, data.length * 36 + 40);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const max = Math.max(...data.map(d=>d.stock), 1);
+  const marginLeft = 140; const rowH = Math.max(28, Math.floor((height - 20) / data.length));
+  data.forEach((d,i)=>{
+    const y = 10 + i * rowH;
+    const barW = Math.round(((width - marginLeft - 20) * d.stock) / max);
+    // label
+    const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', 8); label.setAttribute('y', y + (rowH/2) + 5); label.setAttribute('font-size', '12'); label.setAttribute('fill', '#0F172A'); label.textContent = d.kategori; svg.appendChild(label);
+    // bar background
+    const bg = document.createElementNS(svgNS, 'rect'); bg.setAttribute('x', marginLeft); bg.setAttribute('y', y + 6); bg.setAttribute('width', String(width - marginLeft - 20)); bg.setAttribute('height', String(rowH - 12)); bg.setAttribute('fill', '#F1F5F9'); svg.appendChild(bg);
+    // bar
+    const bar = document.createElementNS(svgNS, 'rect'); bar.setAttribute('x', marginLeft); bar.setAttribute('y', y + 6); bar.setAttribute('width', String(barW)); bar.setAttribute('height', String(rowH - 12)); bar.setAttribute('fill', '#6366F1'); svg.appendChild(bar);
+    // value text
+    const val = document.createElementNS(svgNS, 'text'); val.setAttribute('x', marginLeft + barW + 8); val.setAttribute('y', y + (rowH/2) + 5); val.setAttribute('font-size', '12'); val.setAttribute('fill', '#0F172A'); val.textContent = String(d.stock); svg.appendChild(val);
+  });
+  container.appendChild(svg);
 }
 
 // auto-init on DOM ready
