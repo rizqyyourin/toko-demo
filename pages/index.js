@@ -94,50 +94,7 @@ export default async function initDashboard(){
     card.addEventListener('keydown', (e)=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
   });
 
-  // charts are opt-in: show a fixed placeholder below the cards and mount chart into it
-  try{
-    const cards = document.querySelector('.cards') || document.getElementById('cards');
-    const parent = cards ? cards.parentNode : document.body;
-
-    // create a stable placeholder for the chart (hidden until user requests)
-    const holder = document.createElement('div');
-    holder.id = 'yearly-chart-placeholder';
-    holder.className = 'mt-4 p-4 bg-white rounded shadow-sm';
-    holder.style.minHeight = '260px';
-    holder.style.display = 'none';
-    if (cards && parent) parent.insertBefore(holder, cards.nextSibling);
-    else parent.appendChild(holder);
-
-    // control row with toggle button
-    const ctl = document.createElement('div'); ctl.className = 'mt-3';
-    const btn = document.createElement('button'); btn.className = 'px-3 py-1 text-sm bg-primary text-white rounded'; btn.type = 'button'; btn.textContent = 'Tampilkan Grafik Penjualan';
-    ctl.appendChild(btn);
-    if (cards && parent) parent.insertBefore(ctl, holder);
-    else parent.appendChild(ctl);
-
-    let chartInst = null;
-    btn.addEventListener('click', async () => {
-      if (chartInst) {
-        chartInst.destroy(); chartInst = null; btn.textContent = 'Tampilkan Grafik Penjualan'; holder.style.display = 'none'; holder.innerHTML = '';
-        return;
-      }
-      btn.textContent = 'Memuat...';
-      // show placeholder box immediately so layout stays stable
-      holder.innerHTML = '<div class="flex items-center justify-center h-64 text-sm text-muted">Memuat data dan grafik…</div>';
-      holder.style.display = 'block';
-      try{
-        const data = await loadDashboardData();
-        const mod = await import('../components/chart-yearly.js');
-        chartInst = await mod.mountYearlyChart(holder, data);
-        btn.textContent = 'Sembunyikan Grafik';
-      }catch(e){
-        console.error('[page:index] failed to load chart module', e);
-        showToast('Gagal memuat grafik', { duration: 2500 });
-        btn.textContent = 'Tampilkan Grafik Penjualan';
-        holder.innerHTML = '<div class="text-sm text-red-600">Gagal memuat grafik.</div>';
-      }
-    });
-  }catch(e){ /* non-fatal */ }
+  // charts removed: stock & revenue charts were cleaned up per user request
 }
 
 // auto-init on DOM ready
