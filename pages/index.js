@@ -87,27 +87,68 @@ export default async function initDashboard(){
 }
 
 function renderStockChart(container, data){
-  // simple horizontal bar chart using SVG
+  // pie chart (SVG) with legend — colors per category
   container.innerHTML = '';
   if(!data || !data.length){ container.innerHTML = '<div class="text-muted">Tidak ada data stok.</div>'; return; }
-  const width = container.clientWidth || 600;
-  const height = container.clientHeight || Math.max(200, data.length * 36 + 40);
+  const width = Math.max(320, container.clientWidth || 600);
+  const height = Math.max(240, container.clientHeight || 320);
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width', '100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  const max = Math.max(...data.map(d=>d.stock), 1);
-  const marginLeft = 140; const rowH = Math.max(28, Math.floor((height - 20) / data.length));
-  data.forEach((d,i)=>{
-    const y = 10 + i * rowH;
-    const barW = Math.round(((width - marginLeft - 20) * d.stock) / max);
-    // label
-    const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', 8); label.setAttribute('y', y + (rowH/2) + 5); label.setAttribute('font-size', '12'); label.setAttribute('fill', '#0F172A'); label.textContent = d.kategori; svg.appendChild(label);
-    // bar background
-    const bg = document.createElementNS(svgNS, 'rect'); bg.setAttribute('x', marginLeft); bg.setAttribute('y', y + 6); bg.setAttribute('width', String(width - marginLeft - 20)); bg.setAttribute('height', String(rowH - 12)); bg.setAttribute('fill', '#F1F5F9'); svg.appendChild(bg);
-    // bar
-    const bar = document.createElementNS(svgNS, 'rect'); bar.setAttribute('x', marginLeft); bar.setAttribute('y', y + 6); bar.setAttribute('width', String(barW)); bar.setAttribute('height', String(rowH - 12)); bar.setAttribute('fill', '#6366F1'); svg.appendChild(bar);
-    // value text
-    const val = document.createElementNS(svgNS, 'text'); val.setAttribute('x', marginLeft + barW + 8); val.setAttribute('y', y + (rowH/2) + 5); val.setAttribute('font-size', '12'); val.setAttribute('fill', '#0F172A'); val.textContent = String(d.stock); svg.appendChild(val);
+
+  const total = data.reduce((s,d)=> s + (Number(d.stock)||0), 0) || 1;
+  // color palette (extendable)
+  const palette = ['#6366F1','#F59E0B','#10B981','#EF4444','#A78BFA','#F97316','#06B6D4','#8B5CF6','#84CC16','#EC4899'];
+
+  const cx = Math.min(width * 0.4, 220);
+  const cy = height / 2;
+  const radius = Math.min(cx, cy) - 20;
+
+  // start at top (-90deg)
+  let angle = -Math.PI/2;
+
+  data.forEach((d, i) => {
+    const value = Number(d.stock) || 0;
+    const slice = value / total;
+    const theta = slice * Math.PI * 2;
+    const start = angle;
+    const end = angle + theta;
+    const largeArc = (theta > Math.PI) ? 1 : 0;
+
+    const x1 = cx + radius * Math.cos(start);
+    const y1 = cy + radius * Math.sin(start);
+    const x2 = cx + radius * Math.cos(end);
+    const y2 = cy + radius * Math.sin(end);
+
+    const path = document.createElementNS(svgNS, 'path');
+    const dPath = `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+    path.setAttribute('d', dPath);
+    path.setAttribute('fill', palette[i % palette.length]);
+    path.setAttribute('stroke', '#fff');
+    path.setAttribute('stroke-width', '1');
+    path.setAttribute('data-kategori', d.kategori);
+    path.setAttribute('data-stock', String(d.stock));
+    path.setAttribute('role','img');
+    path.setAttribute('aria-label', `${d.kategori}: ${d.stock}`);
+    // tooltip-like title
+    const title = document.createElementNS(svgNS, 'title'); title.textContent = `${d.kategori}: ${d.stock}`; path.appendChild(title);
+    svg.appendChild(path);
+
+    angle = end;
   });
+
+  // legend on the right
+  const legendX = Math.max(cx + radius + 20, width * 0.55);
+  const legendY = 20;
+  const lineH = 20;
+  data.forEach((d,i) => {
+    const y = legendY + i * (lineH + 6);
+    const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', legendX); rect.setAttribute('y', y); rect.setAttribute('width', '14'); rect.setAttribute('height', '14'); rect.setAttribute('fill', palette[i % palette.length]); svg.appendChild(rect);
+    const txt = document.createElementNS(svgNS, 'text'); txt.setAttribute('x', legendX + 20); txt.setAttribute('y', y + 11); txt.setAttribute('font-size', '12'); txt.setAttribute('fill', '#0F172A'); txt.textContent = `${d.kategori} (${d.stock})`; svg.appendChild(txt);
+  });
+
+  // center label: total
+  const centerLabel = document.createElementNS(svgNS, 'text'); centerLabel.setAttribute('x', cx); centerLabel.setAttribute('y', cy); centerLabel.setAttribute('text-anchor','middle'); centerLabel.setAttribute('font-size','14'); centerLabel.setAttribute('fill','#0F172A'); centerLabel.setAttribute('font-weight','600'); centerLabel.textContent = String(total); svg.appendChild(centerLabel);
+
   container.appendChild(svg);
 }
 
