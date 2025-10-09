@@ -13,6 +13,45 @@ function formatCurrency(n){
   try{ return Number(n).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }); }catch(e){ return String(n); }
 }
 
+// robust date parser: accepts Date, ISO strings, dd/mm/yyyy or dd-mm-yyyy (assume day-first for locale),
+// timestamps (ms), and Excel-style serial numbers.
+function parseDate(v){
+  if (!v && v !== 0) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  // numbers: could be epoch ms or Excel serial
+  if (typeof v === 'number'){
+    // treat large numbers as ms timestamp
+    if (v > 1e12) return new Date(v);
+    if (v > 1e9) return new Date(v); // ms-ish
+    // otherwise treat as Excel serial (days since 1899-12-30)
+    try{ const ms = (v - 25569) * 86400 * 1000; return new Date(ms); }catch(e){ return null; }
+  }
+  const s = String(v).trim();
+  if (!s) return null;
+  // ISO or RFC format
+  if (/^\d{4}-\d{2}-\d{2}/.test(s) || s.includes('T')){
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // dd/mm/yyyy or mm/dd/yyyy-like with slashes: assume day-first (id locale)
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash){
+    const day = Number(slash[1]); const mon = Number(slash[2]); let yr = Number(slash[3]); if (yr < 100) yr += 2000;
+    const d = new Date(yr, mon - 1, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // dash-separated day-month-year
+  const dash = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+  if (dash){
+    const day = Number(dash[1]); const mon = Number(dash[2]); let yr = Number(dash[3]); if (yr < 100) yr += 2000;
+    const d = new Date(yr, mon - 1, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // fallback to Date parser
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 async function loadCard(m) {
   const el = document.getElementById(m.id);
   if (!el) return;
@@ -124,7 +163,9 @@ async function fetchRevenueItems(){
 
   const out = [];
   penjualan.forEach(p => {
-    const tgl = p.TGL || p.TANGGAL || p.DATE || p.TGL_PENJUALAN || p.CREATED || p.WAKTU || '';
+    const raw = p.TGL || p.TANGGAL || p.DATE || p.TGL_PENJUALAN || p.CREATED || p.WAKTU || p.WAKTU_PENJUALAN || '';
+    const parsed = parseDate(raw);
+    const tgl = parsed ? parsed.toISOString() : '';
     let subtotal = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
     if (!subtotal || subtotal <= 0) {
       // compute from item_penjualan if available
