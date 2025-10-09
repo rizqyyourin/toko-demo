@@ -42,28 +42,37 @@ function renderStockChart({ labels = [], values = [] } = {}){
   if(!values || values.length === 0){ if(emptyEl) emptyEl.classList.remove('hidden'); ctx.style.display='none'; return; } else { if(emptyEl) emptyEl.classList.add('hidden'); ctx.style.display='block'; }
   destroyChart(stockChart);
   const isMobile = window.matchMedia('(max-width: 767px)').matches;
-  const cfg = {
-    type: isMobile ? 'bar' : 'bar', // we'll flip index/axis via options
-    data: (function(){
-      // build per-category palette (HSL hues evenly spaced)
-      const n = labels.length || 1;
-      const bg = [];
-      const bd = [];
-      for(let i=0;i<n;i++){
-        const hue = Math.round((i * 360) / n);
-        bg.push(`hsla(${hue},70%,50%,0.28)`);
-        bd.push(`hsl(${hue},70%,40%)`);
-      }
-      return { labels, datasets: [{ label: 'Stok', data: values, backgroundColor: bg, borderColor: bd, borderWidth: 1 }] };
-    })(),
-    options: {
+  const cfg = (function(){
+    // build per-category palette (HSL hues evenly spaced)
+    const n = labels.length || 1;
+    const bg = [];
+    const bd = [];
+    for(let i=0;i<n;i++){
+      const hue = Math.round((i * 360) / n);
+      bg.push(`hsla(${hue},70%,50%,0.28)`);
+      bd.push(`hsl(${hue},70%,40%)`);
+    }
+    const data = { labels, datasets: [{ label: 'Stok', data: values, backgroundColor: bg, borderColor: bd, borderWidth: 1 }] };
+    const options = {
       indexAxis: isMobile ? 'y' : 'x',
       responsive: true,
       maintainAspectRatio: false,
-      scales: { x: { ticks: { callback: v=> Number(v).toLocaleString('id-ID') } }, y: { ticks: { autoSkip: false } } },
-      plugins: { tooltip: { callbacks: { label(ctx){ const v = ctx.raw || 0; return `${ctx.label} • ${v} unit`; } } }, legend: { display:false } }
+      plugins: { tooltip: { callbacks: { label(ctx){ const v = ctx.raw || 0; const label = ctx.label || ctx.dataset.label || ''; return `${label} • ${v} unit`; } } }, legend: { display:false } }
+    };
+    // scales: when horizontal (indexAxis='y'), y should be category labels
+    if(isMobile){
+      options.scales = {
+        x: { ticks: { callback: v=> Number(v).toLocaleString('id-ID') } },
+        y: { type: 'category', ticks: { autoSkip: false } }
+      };
+    } else {
+      options.scales = {
+        x: { type: 'category', ticks: { autoSkip: false } },
+        y: { ticks: { callback: v=> Number(v).toLocaleString('id-ID') } }
+      };
     }
-  };
+    return { type: 'bar', data, options };
+  })();
   // eslint-disable-next-line no-undef
   stockChart = new Chart(ctx.getContext('2d'), cfg);
 }
