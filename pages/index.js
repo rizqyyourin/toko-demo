@@ -74,7 +74,7 @@ function renderSalesChart({ labels = [], values = [], year = null, count = 0, to
   };
   // eslint-disable-next-line no-undef
   salesChart = new Chart(ctx.getContext('2d'), cfg);
-  if(summary) summary.textContent = `Total thn ${year}: ${formatIDR(total)} (${count} nota)`;
+  if(summary) summary.textContent = '';
 }
 
 
