@@ -175,8 +175,8 @@ function renderStockChart(container, data){
       try{
         const kategori = path.getAttribute('data-kategori') || '';
         const stock = Number(path.getAttribute('data-stock') || 0) || 0;
-        // show clearer detail without percent: "KATEGORI stok N barang"
-        tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">${kategori} stok ${stock} barang</div>`;
+  // show clearer detail without percent: "KATEGORI" (header) and "stok N barang" (detail)
+  tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">stok ${stock} barang</div>`;
         const rect = container.getBoundingClientRect();
         const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
         tooltip.style.left = Math.min(rect.width - 220, x) + 'px';
