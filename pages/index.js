@@ -98,13 +98,40 @@ export default async function initDashboard(){
   }catch(e){ console.warn('[page:index] failed to render stock chart', e); }
 }
 
-// revenue helpers: aggregate item_penjualan by date range
+// revenue helpers: use `penjualan` as primary source; if penjualan.SUBTOTAL is missing
+// fall back to summing item_penjualan rows for that NOTA. Returns array of { tgl, subtotal }
 async function fetchRevenueItems(){
-  const res = await getList('item_penjualan', { useCache: false });
-  return (res.data || []).map(r => ({
-    tgl: r.TGL || r.TANGGAL || r.DATE || r.TGL_PENJUALAN || '',
-    subtotal: Number(r.SUBTOTAL || r.SUB_TOTAL || r.HARGA || 0) || 0
-  })).filter(x => x.subtotal && x.tgl);
+  // fetch penjualan and items in parallel
+  const [pRes, itRes] = await Promise.all([
+    getList('penjualan', { useCache: false }),
+    getList('item_penjualan', { useCache: false })
+  ]);
+  const penjualan = pRes.data || [];
+  const items = itRes.data || [];
+  // group items by NOTA for quick subtotal computation
+  const itemsByNota = {};
+  items.forEach(it => {
+    const nota = (it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '').toString();
+    if (!nota) return;
+    itemsByNota[nota] = itemsByNota[nota] || [];
+    itemsByNota[nota].push(it);
+  });
+
+  const out = [];
+  penjualan.forEach(p => {
+    const tgl = p.TGL || p.TANGGAL || p.DATE || p.TGL_PENJUALAN || p.CREATED || p.WAKTU || '';
+    let subtotal = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
+    if (!subtotal || subtotal <= 0) {
+      // compute from item_penjualan if available
+      const nota = (p.NOTA || p.NOMOR || p.NO || '').toString();
+      const its = itemsByNota[nota] || [];
+      subtotal = its.reduce((s,it) => s + (Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0), 0);
+    }
+    if (!tgl) return; // skip if we can't determine date
+    out.push({ tgl: tgl, subtotal: subtotal });
+  });
+  // filter out zero subtotals and invalid dates
+  return out.filter(x => x.subtotal && x.tgl);
 }
 
 function bucketBy(items, range){
