@@ -41,102 +41,23 @@ async function loadDashboardData(){
     const elB = document.getElementById('count-barang'); if (elB) elB.textContent = String(barang.length || 0);
     const elS = document.getElementById('count-penjualan'); if (elS) elS.textContent = String(penjualan.length || 0);
 
-    // total revenue: compute primarily from item_penjualan to avoid mismatch
-    // Build barang price map for fallback when item row doesn't include HARGA
-    const priceMap = {};
-    // helper: robust parse for currency/number strings (handles '1.234.567' etc.)
-    function parseNumber(v){
-      if (v == null || v === '') return 0;
-      if (typeof v === 'number' && !isNaN(v)) return v;
-      let s = String(v).trim();
-      s = s.replace(/[^0-9.,-]/g, '');
-      if (!s) return 0;
-      const lastDot = s.lastIndexOf('.');
-      const lastComma = s.lastIndexOf(',');
-      if (lastComma > lastDot){ s = s.replace(/\./g, '').replace(',', '.'); }
-      else if (lastDot > lastComma && (s.match(/\./g)||[]).length > 1){ s = s.replace(/\./g, ''); }
-      else { s = s.replace(/,/g, ''); }
-      const n = Number(s);
-      return isNaN(n) ? 0 : n;
-    }
-    function normalizeNota(x){
-      if (x == null) return '';
-      const s = String(x).trim().toLowerCase();
-      const cleaned = s.replace(/^(inv|nota|no|no\.|np)\s*/i, '').replace(/[^0-9a-z]/g, '');
-      return cleaned || s.replace(/[^0-9a-z]/g,'');
-    }
-      // canonical key used across the dashboard to compare nota values reliably
-      function canonicalNotaKey(x){
-        if (x == null) return '';
-        try{
-          const s = String(x).toUpperCase().trim();
-          // remove common prefixes and non-alphanumeric characters, keep letters+digits only
-          return s.replace(/^(INV|NOTA|NO|NO\.|NP)\s*/i, '').replace(/[^0-9A-Z]/g, '');
-        }catch(e){ return String(x).toUpperCase().replace(/[^0-9A-Z]/g,''); }
-      }
-    barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = parseNumber(b.HARGA || b.HARGA_BARANG || 0); });
-
-    // build deduplicated per-nota item sums
+    // total revenue: prefer penjualan.SUBTOTAL, fallback to items grouping
+    let totalRevenue = 0;
+    // build itemsByNota map
     const itemsByNota = {};
-    const perNotaItemsSum = {}; // nota -> numeric sum
-    const seenItemKeys = new Set();
-    let duplicateItems = 0;
-    items.forEach(it => {
-  const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
-  const nota = normalizeNota(rawNota);
-  const keyNota = canonicalNotaKey(rawNota);
-      const qty = parseNumber(it.QTY || it.QTY_PENJUALAN || 0);
-      const subGiven = parseNumber(it.SUBTOTAL || it.SUB_TOTAL || 0);
-      const kode = String(it.KODE_BARANG || it.KODE || '');
-      const harga = parseNumber(it.HARGA || 0) || priceMap[kode] || 0;
-      const computed = (subGiven && subGiven > 0) ? subGiven : (qty * harga);
-      const itemKey = keyNota + '|' + kode;
-      if (seenItemKeys.has(itemKey)) {
-        duplicateItems++;
-        return; // skip duplicate row
-      }
-      seenItemKeys.add(itemKey);
-      if (keyNota) {
-        perNotaItemsSum[keyNota] = (perNotaItemsSum[keyNota] || 0) + Number(computed || 0);
-        (itemsByNota[keyNota] = itemsByNota[keyNota] || []).push(it);
-      }
-    });
-    // itemsTotal is sum of unique per-nota sums
-    const itemsTotal = Object.values(perNotaItemsSum).reduce((s,v)=>s+Number(v||0), 0);
-    if (duplicateItems > 0) console.debug('[page:index] skipped duplicate item_penjualan rows', { totalRows: items.length, duplicates: duplicateItems });
-
-    // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
-    let penjualanOnlyTotal = 0;
+    items.forEach(it => { const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || ''); if(!nota) return; (itemsByNota[nota] = itemsByNota[nota] || []).push(it); });
     penjualan.forEach(p => {
-      const rawNota = p.ID_NOTA || p.NOTA || p.NOMOR || p.NO || '';
-      const keyNota = canonicalNotaKey(rawNota);
-      // if any items exist for this canonical nota key, skip adding penjualan.SUBTOTAL
-      if (keyNota && (itemsByNota[keyNota] && itemsByNota[keyNota].length > 0)) {
-        return;
+      let sub = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
+      if (!sub || sub <= 0){
+        const nota = String(p.NOTA || p.NOMOR || p.NO || '');
+        const its = itemsByNota[nota] || [];
+        sub = its.reduce((s,it) => s + (Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0), 0);
       }
-      // fallback: try older normalizeNota form (defensive)
-      const fallbackNota = normalizeNota(rawNota);
-      if (fallbackNota && (itemsByNota[fallbackNota] && itemsByNota[fallbackNota].length > 0)) return;
-      const sub = parseNumber(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0);
-      penjualanOnlyTotal += sub;
+      totalRevenue += sub || 0;
     });
-
-    // diagnostics: log per-nota breakdown and overlaps to help find double-counting
-    try {
-      const perNotaArr = Object.keys(perNotaItemsSum).map(k => ({ nota: k, sum: perNotaItemsSum[k] }));
-      perNotaArr.sort((a,b)=>b.sum - a.sum);
-      const penjualanMapByNota = {};
-      penjualan.forEach(p => { const raw = p.ID_NOTA || p.NOTA || p.NOMOR || ''; const n = normalizeNota(raw); penjualanMapByNota[n] = (penjualanMapByNota[n] || 0) + parseNumber(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0); });
-      const penjualanArr = Object.keys(penjualanMapByNota).map(k => ({ nota: k, sum: penjualanMapByNota[k] }));
-      penjualanArr.sort((a,b)=>b.sum - a.sum);
-      const overlap = perNotaArr.filter(x => penjualanMapByNota[x.nota]);
-      console.debug('[page:index] revenue debug', { itemsRows: items.length, uniqueItemKeys: seenItemKeys.size, itemsTotal, penjualanRows: penjualan.length, penjualanOnlyTotal, topItemNotas: perNotaArr.slice(0,8), topPenjualanNotas: penjualanArr.slice(0,8), overlapSample: overlap.slice(0,8) });
-    } catch(e) { console.debug('[page:index] revenue debug failed', e); }
-
-    const totalRevenue = itemsTotal + penjualanOnlyTotal;
     const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
 
-    return { pelanggan, barang, penjualan, items, totalRevenue, itemsByNota, perNotaItemsSum, penjualanMapByNota };
+    return { pelanggan, barang, penjualan, items, totalRevenue };
   }catch(e){
     console.error('[page:index] loadDashboardData error', e);
     showToast('Gagal memuat data dashboard', { duration: 2500 });
@@ -160,12 +81,7 @@ export default async function initDashboard(){
   });
 
   // load dashboard data (single-fetch for required tables) and render cards
-  const data = await loadDashboardData();
-
-  // render yearly sales chart under the cards area
-  try{
-    renderYearlySalesChart(data);
-  }catch(e){ console.error('[page:index] renderYearlySalesChart failed', e); }
+  await loadDashboardData();
 
   // make cards keyboard-activatable
   document.querySelectorAll('.card').forEach(card=>{
@@ -177,142 +93,6 @@ export default async function initDashboard(){
 }
 
 // charts and helpers removed — cleaned up to simplify dashboard
-
-function monthName(idx){ return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][idx] || String(idx); }
-
-function parseYearFromDateStr(s){
-  if(!s) return null;
-  try{
-    const str = String(s).trim();
-    const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if(iso) return Number(iso[1]);
-    const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if(dmy){ let yy = dmy[3]; if(yy.length===2) yy = '20'+yy; return Number(yy); }
-    const d = new Date(str);
-    if(!isNaN(d)) return d.getFullYear();
-  }catch(e){}
-  return null;
-}
-
-function canonicalNotaKeyLocal(x){ if(x==null) return ''; try{ return String(x).toUpperCase().trim().replace(/^(INV|NOTA|NO|NO\.|NP)\s*/i,'').replace(/[^0-9A-Z]/g,''); }catch(e){ return String(x).toUpperCase().replace(/[^0-9A-Z]/g,''); } }
-
-function renderYearlySalesChart(data){
-  let chartWrap = document.getElementById('yearly-sales-wrap');
-  if(!chartWrap){
-    chartWrap = document.createElement('div'); chartWrap.id='yearly-sales-wrap'; chartWrap.className='mt-6 space-y-3';
-    const cards = document.querySelector('.cards') || document.getElementById('cards');
-    if(cards && cards.parentNode) cards.parentNode.insertBefore(chartWrap, cards.nextSibling);
-    else document.body.appendChild(chartWrap);
-  }
-  chartWrap.innerHTML = '';
-
-  const years = new Set();
-  // collect years from penjualan TGL and item-level TGL if present
-  (data.penjualan||[]).forEach(p => { const y = parseYearFromDateStr(p.TGL || p.TANGGAL || p.tgl || ''); if(y) years.add(y); });
-  // also scan item rows for date-like fields (some seeds may include TGL on items)
-  (data.items || []).forEach(it => { const y = parseYearFromDateStr(it.TGL || it.tgl || it.Tanggal || ''); if(y) years.add(y); });
-  const now = new Date(); if(years.size===0) years.add(now.getFullYear());
-  const yearsArr = Array.from(years).sort((a,b)=>b-a);
-
-  const header = document.createElement('div'); header.className='flex items-center justify-between';
-  const title = document.createElement('h3'); title.className='text-lg font-semibold'; title.textContent = 'Grafik Penjualan per Tahun';
-  const sel = document.createElement('select'); sel.className='border px-2 py-1 rounded'; yearsArr.forEach(y=>{ const o=document.createElement('option'); o.value=String(y); o.textContent=String(y); sel.appendChild(o); });
-  // default to most recent available year
-  const defaultYear = yearsArr.length ? yearsArr[0] : now.getFullYear(); sel.value = String(defaultYear);
-  const selWrap = document.createElement('div'); selWrap.className='flex items-center gap-2'; selWrap.appendChild(sel);
-  header.appendChild(title); header.appendChild(selWrap); chartWrap.appendChild(header);
-
-  const chartBox = document.createElement('div'); chartBox.className='mt-2 p-3 bg-white rounded shadow-sm'; chartWrap.appendChild(chartBox);
-
-  function computeMonthlyTotals(year){
-    const perNota = data.perNotaItemsSum || {};
-    const pen = data.penjualan || [];
-    const months = new Array(12).fill(0);
-    Object.keys(perNota).forEach(k => {
-      // find penjualan row with matching canonical key
-      const pRow = pen.find(p => canonicalNotaKeyLocal(p.ID_NOTA || p.NOTA || p.NOMOR || '') === k);
-      let iso = null;
-      if(pRow && pRow.TGL){ const s = String(pRow.TGL); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) iso = `${m[1]}-${m[2]}-${m[3]}`; else { const mm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(mm){ let yy = mm[3]; if(yy.length===2) yy='20'+yy; iso = `${yy}-${mm[2].padStart(2,'0')}-${mm[1].padStart(2,'0')}`; } } }
-      // fallback: look at item rows for this nota and see if any item has a TGL
-      if(!iso){ const itemsForNota = (data.itemsByNota && data.itemsByNota[k]) || []; for(const it of itemsForNota){ const y = parseYearFromDateStr(it.TGL || it.tgl || it.Tanggal || ''); if(y){ // build iso from that item if possible (approximate to month-day 01)
-            const m = String(y); iso = `${m}-01-01`; break; } } }
-      if(!iso) return; const yyyy = Number(iso.slice(0,4)); if(yyyy !== Number(year)) return; const mon = Number(iso.slice(5,7)) - 1; months[mon] += Number(perNota[k]||0);
-    });
-    return months;
-  }
-
-  function draw(year){
-    chartBox.innerHTML = '';
-    const months = computeMonthlyTotals(year);
-    const max = Math.max(1, ...months);
-    const w = 900; const h = 320; const leftAxisW = 96; const bottomH = 48; const chartW = w - leftAxisW - 28; const chartH = h - bottomH - 28;
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width','100%'); svg.setAttribute('height', String(h));
-
-    // helper: compact currency (Rp 1.2jt, Rp 3rb)
-    function compactCurrency(n){
-      const v = Number(n||0);
-      if (v >= 1000000) return 'Rp ' + (v/1000000).toFixed(v%1000000===0?0:1) + 'jt';
-      if (v >= 1000) return 'Rp ' + (v/1000).toFixed(v%1000===0?0:1) + 'rb';
-      return 'Rp ' + v.toLocaleString('id-ID');
-    }
-
-    // background grid + left axis ticks
-    const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(${leftAxisW-8},12)`);
-    const ticks = 4; for(let i=0;i<=ticks;i++){
-      const tRatio = i / ticks; const y = Math.round(tRatio * chartH);
-      const val = Math.round((1 - tRatio) * max);
-      // grid line
-      const line = document.createElementNS(svgNS,'line'); line.setAttribute('x1',0); line.setAttribute('y1', y); line.setAttribute('x2', chartW); line.setAttribute('y2', y); line.setAttribute('stroke', '#e6e9ef'); line.setAttribute('stroke-width','1'); axis.appendChild(line);
-      // tick label
-      const t = document.createElementNS(svgNS,'text'); t.setAttribute('x', -8); t.setAttribute('y', y + 4); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.setAttribute('text-anchor','end'); t.textContent = compactCurrency(val); axis.appendChild(t);
-    }
-    svg.appendChild(axis);
-
-    // tooltip overlay
-    const tooltip = document.createElement('div'); tooltip.style.position='absolute'; tooltip.style.pointerEvents='none'; tooltip.style.padding='6px 8px'; tooltip.style.background='rgba(17,24,39,0.9)'; tooltip.style.color='#fff'; tooltip.style.fontSize='12px'; tooltip.style.borderRadius='6px'; tooltip.style.display='none'; tooltip.style.zIndex='60'; document.body.appendChild(tooltip);
-
-    // bars group
-    const bars = document.createElementNS(svgNS,'g'); bars.setAttribute('transform', `translate(${leftAxisW},12)`);
-    const band = chartW / 12; const barW = Math.max(14, band * 0.6); const gap = band - barW;
-    months.forEach((m, idx)=>{
-      const x = idx * band + gap/2;
-      const hBar = (max === 0) ? 0 : (m / max) * chartH;
-      const y = chartH - hBar;
-      const rect = document.createElementNS(svgNS,'rect');
-      rect.setAttribute('x', x);
-      rect.setAttribute('y', chartH); // start at bottom for animation
-      rect.setAttribute('width', String(barW));
-      rect.setAttribute('height', '0');
-      rect.setAttribute('fill', '#4f46e5'); rect.setAttribute('rx','6'); rect.setAttribute('aria-label', `${monthName(idx)}: ${formatCurrency(m)}`);
-      bars.appendChild(rect);
-
-      // value label (hidden until hover or after animate)
-      const vlabel = document.createElementNS(svgNS,'text'); vlabel.setAttribute('x', x + barW/2); vlabel.setAttribute('y', chartH - hBar - 8); vlabel.setAttribute('font-size','12'); vlabel.setAttribute('fill','#0f172a'); vlabel.setAttribute('text-anchor','middle'); vlabel.textContent = compactCurrency(m); vlabel.style.opacity = '0.0'; bars.appendChild(vlabel);
-
-      // month label
-      const lbl = document.createElementNS(svgNS,'text'); lbl.setAttribute('x', x + barW/2); lbl.setAttribute('y', chartH + 20); lbl.setAttribute('font-size','12'); lbl.setAttribute('fill','#6b7280'); lbl.setAttribute('text-anchor','middle'); lbl.textContent = monthName(idx); bars.appendChild(lbl);
-
-      // hover events
-      rect.addEventListener('mouseenter', (ev)=>{ tooltip.style.display='block'; tooltip.textContent = `${monthName(idx)} — ${formatCurrency(m)}`; vlabel.style.opacity='1'; rect.setAttribute('fill','#3730a3'); });
-      rect.addEventListener('mousemove', (ev)=>{ tooltip.style.left = (ev.pageX + 12) + 'px'; tooltip.style.top = (ev.pageY + 12) + 'px'; });
-      rect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; vlabel.style.opacity='0'; rect.setAttribute('fill','#4f46e5'); });
-
-      // simple animation: grow height from 0 to hBar
-      requestAnimationFrame(()=>{
-        rect.setAttribute('y', String(y));
-        rect.setAttribute('height', String(hBar));
-      });
-    });
-    svg.appendChild(bars);
-    chartBox.appendChild(svg);
-    // remove tooltip when navigating away
-    setTimeout(()=>{ try{ if(tooltip && tooltip.parentNode) {} }catch(e){} }, 0);
-  }
-
-  sel.addEventListener('change', ()=> draw(sel.value));
-  draw(sel.value);
-}
 
 // auto-init on DOM ready
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { initNav(); highlightActive(); initDashboard(); });
