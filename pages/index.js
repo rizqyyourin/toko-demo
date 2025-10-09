@@ -246,9 +246,7 @@ async function renderRevenuePerMonth(container, year){
       const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', String(x + barW/2)); label.setAttribute('y', String(height - 10)); label.setAttribute('font-size','11'); label.setAttribute('fill','#475569'); label.setAttribute('text-anchor','middle'); label.textContent = monthNames[i]; svg.appendChild(label);
     });
 
-    // top-left title only (total hidden; will show on hover)
-    const title = document.createElementNS(svgNS, 'text'); title.setAttribute('x','6'); title.setAttribute('y','16'); title.setAttribute('font-size','13'); title.setAttribute('fill','#0F172A'); title.setAttribute('font-weight','600'); title.textContent = `Penghasilan ${year}`; svg.appendChild(title);
-    // create a tooltip for revenue bars
+  // create a tooltip for revenue bars
     container.style.position = container.style.position || 'relative';
     const revTooltip = document.createElement('div');
     revTooltip.className = 'revenue-tooltip';
