@@ -149,9 +149,11 @@ function renderStockChart(container, data){
   tooltip.style.background = 'white';
   tooltip.style.border = '1px solid rgba(15,23,42,0.08)';
   tooltip.style.boxShadow = '0 6px 18px rgba(2,6,23,0.08)';
-  tooltip.style.padding = '8px 10px';
+  tooltip.style.padding = '6px 8px';
   tooltip.style.borderRadius = '6px';
   tooltip.style.fontSize = '13px';
+  tooltip.style.maxWidth = '160px';
+  tooltip.style.boxSizing = 'border-box';
   tooltip.style.zIndex = '10';
   container.appendChild(tooltip);
 
@@ -175,19 +177,31 @@ function renderStockChart(container, data){
       try{
         const kategori = path.getAttribute('data-kategori') || '';
         const stock = Number(path.getAttribute('data-stock') || 0) || 0;
-  // single-line detail: "KATEGORI — N barang" (no 'stok' word)
-  tooltip.innerHTML = `<div style="font-weight:600;display:inline-block;margin-right:8px">${kategori}</div><div style="color:#475569;display:inline-block">${stock} barang</div>`;
-  tooltip.style.whiteSpace = 'nowrap';
-  const rect = container.getBoundingClientRect();
-  const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
-  // keep tooltip inside chart box
-  tooltip.style.left = Math.min(Math.max(8, x), Math.max(8, rect.width - tooltip.offsetWidth - 12)) + 'px';
-  tooltip.style.top = Math.min(Math.max(8, y), Math.max(8, rect.height - tooltip.offsetHeight - 12)) + 'px';
-  tooltip.style.display = 'block';
+        // single-line detail: "KATEGORI — N barang" (no 'stok' word)
+        tooltip.innerHTML = `<div style="font-weight:600;display:inline-block;margin-right:6px">${kategori}</div><div style="color:#475569;display:inline-block">${stock} barang</div>`;
+        tooltip.style.whiteSpace = 'nowrap';
+        // show first so we can measure offsetWidth/offsetHeight
+        tooltip.style.display = 'block';
+        const rect = container.getBoundingClientRect();
+        const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
+        // measure then clamp so it doesn't overflow right or bottom
+        const tw = tooltip.offsetWidth || 120; const th = tooltip.offsetHeight || 28;
+        const left = Math.min(Math.max(8, x), Math.max(8, rect.width - tw - 12));
+        const top = Math.min(Math.max(8, y), Math.max(8, rect.height - th - 12));
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
       }catch(e){}
     });
     path.addEventListener('mousemove', (ev) => {
-      try{ const rect = container.getBoundingClientRect(); const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12; tooltip.style.left = Math.min(rect.width - 140, x) + 'px'; tooltip.style.top = Math.min(rect.height - 60, y) + 'px'; }catch(e){}
+      try{
+        const rect = container.getBoundingClientRect();
+        const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
+        const tw = tooltip.offsetWidth || 120; const th = tooltip.offsetHeight || 28;
+        const left = Math.min(Math.max(8, x), Math.max(8, rect.width - tw - 12));
+        const top = Math.min(Math.max(8, y), Math.max(8, rect.height - th - 12));
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+      }catch(e){}
     });
     path.addEventListener('mouseleave', () => {
       // restore
