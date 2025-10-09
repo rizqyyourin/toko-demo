@@ -80,12 +80,12 @@ function seedAll() {
     ]
   );
 
-  // PENJUALAN (2025)
+    // PENJUALAN (2025)
   setHeadersAndRows_Menu(
     'PENJUALAN',
     TABLES.penjualan.headers,
     [
-      ['NOTA_1','01/01/25','PELANGGAN_1',50000],
+      ['NOTA_1','31/12/24','PELANGGAN_1',50000],
       ['NOTA_2','01/01/25','PELANGGAN_2',200000],
       ['NOTA_3','01/01/25','PELANGGAN_3',430000],
       ['NOTA_4','02/01/25','PELANGGAN_7',120000],
@@ -93,8 +93,8 @@ function seedAll() {
       ['NOTA_6','03/01/25','PELANGGAN_8',230000],
       ['NOTA_7','03/01/25','PELANGGAN_9',390000],
       ['NOTA_8','03/01/25','PELANGGAN_5',65000],
-      ['NOTA_9','04/01/25','PELANGGAN_2',40000],
-      ['NOTA_10','05/01/25','PELANGGAN_10',90000],
+      ['NOTA_9','04/01/25','PELANGGAN_2',400000],
+      ['NOTA_10','05/01/25','PELANGGAN_10',45000],
     ]
   );
 
