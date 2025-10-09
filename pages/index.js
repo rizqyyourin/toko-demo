@@ -141,6 +141,8 @@ function renderStockChart(container, data){
 
   // interactive tooltip
   container.style.position = container.style.position || 'relative';
+  // add a small bottom margin so the chart has breathing room
+  container.style.marginBottom = container.style.marginBottom || '12px';
   const tooltip = document.createElement('div');
   tooltip.className = 'stock-tooltip';
   tooltip.style.position = 'absolute';
