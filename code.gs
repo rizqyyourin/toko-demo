@@ -43,6 +43,11 @@ function onOpen() {
 
 // Seeder: buat/normalize header & isi data dummy (tahun 2025)
 function seedAll() {
+  // clear existing data under headers to make seeder idempotent
+  const toClear = ['PELANGGAN','BARANG','PENJUALAN','ITEM_PENJUALAN'];
+  const ssForClear = ssMenu();
+  toClear.forEach(n => { const sh = ssForClear.getSheetByName(n); if (sh) clearBelowHeader_(sh); });
+
   // PELANGGAN
   setHeadersAndRows_Menu(
     'PELANGGAN',
@@ -60,25 +65,43 @@ function seedAll() {
       ['PELANGGAN_10','JONNY','JAK-SEL','WANITA'],
     ]
   );
+  // ITEM seed data (single source of truth for item rows)
+  const seededItems = [
+    ['NOTA_1','BRG_1',2],['NOTA_1','BRG_2',2],
+    ['NOTA_2','BRG_6',1],
+    ['NOTA_3','BRG_4',1],['NOTA_3','BRG_7',1],['NOTA_3','BRG_6',1],
+    ['NOTA_4','BRG_9',2],['NOTA_4','BRG_10',2],
+    ['NOTA_5','BRG_3',1],
+    ['NOTA_6','BRG_7',1],['NOTA_6','BRG_5',1],['NOTA_6','BRG_3',1],
+    ['NOTA_7','BRG_5',1],['NOTA_7','BRG_6',1],['NOTA_7','BRG_7',1],['NOTA_7','BRG_8',1],
+    ['NOTA_8','BRG_5',1],['NOTA_8','BRG_9',1],
+    ['NOTA_9','BRG_5',10],
+    ['NOTA_10','BRG_2',3],['NOTA_10','BRG_1',1],
+  ];
 
-  // BARANG
-  setHeadersAndRows_Menu(
-    'BARANG',
-    TABLES.barang.headers,
-    [
-      // KODE, NAMA, KATEGORI, HARGA, STOCK
-      ['BRG_1','PEN','ATK',15000,50],
-      ['BRG_2','PENSIL','ATK',10000,100],
-      ['BRG_3','PAYUNG','RT',70000,20],
-      ['BRG_4','PANCI','MASAK',110000,10],
-      ['BRG_5','SAPU','RT',40000,30],
-      ['BRG_6','KIPAS','ELEKTRONIK',200000,15],
-      ['BRG_7','KUALI','MASAK',120000,12],
-      ['BRG_8','SIKAT','RT',30000,40],
-      ['BRG_9','GELAS','RT',25000,25],
-      ['BRG_10','PIRING','RT',35000,18],
-    ]
-  );
+  // compute total sold per kode from seededItems
+  const soldMap = {};
+  seededItems.forEach(r => { const kode = r[1]; const q = Number(r[2]||0); if(!kode) return; soldMap[kode] = (soldMap[kode] || 0) + (isNaN(q)?0:q); });
+
+  // BARANG (we write STOCK as final stock after seeded sales so seeder is idempotent)
+  // KODE, NAMA, KATEGORI, HARGA, STOCK
+  const initialBarang = [
+    ['BRG_1','PEN','ATK',15000,50],
+    ['BRG_2','PENSIL','ATK',10000,100],
+    ['BRG_3','PAYUNG','RT',70000,20],
+    ['BRG_4','PANCI','MASAK',110000,10],
+    ['BRG_5','SAPU','RT',40000,30],
+    ['BRG_6','KIPAS','ELEKTRONIK',200000,15],
+    ['BRG_7','KUALI','MASAK',120000,12],
+    ['BRG_8','SIKAT','RT',30000,40],
+    ['BRG_9','GELAS','RT',25000,25],
+    ['BRG_10','PIRING','RT',35000,18],
+  ];
+  const finalBarang = initialBarang.map(r => {
+    const kode = r[0]; const initStock = Number(r[4]||0); const sold = Number(soldMap[kode]||0); const finalStock = Math.max(0, initStock - sold);
+    return [r[0], r[1], r[2], r[3], finalStock];
+  });
+  setHeadersAndRows_Menu('BARANG', TABLES.barang.headers, finalBarang);
   // ensure STOCK column is present and backfilled where necessary
   ensureStockColumn();
   backfillStockIfMissing();
@@ -101,48 +124,8 @@ function seedAll() {
     ]
   );
 
-  // ITEM_PENJUALAN
-  setHeadersAndRows_Menu(
-    'ITEM_PENJUALAN',
-    TABLES.item_penjualan.headers,
-    [
-      ['NOTA_1','BRG_1',2],['NOTA_1','BRG_2',2],
-      ['NOTA_2','BRG_6',1],
-      ['NOTA_3','BRG_4',1],['NOTA_3','BRG_7',1],['NOTA_3','BRG_6',1],
-      ['NOTA_4','BRG_9',2],['NOTA_4','BRG_10',2],
-      ['NOTA_5','BRG_3',1],
-      ['NOTA_6','BRG_7',1],['NOTA_6','BRG_5',1],['NOTA_6','BRG_3',1],
-      ['NOTA_7','BRG_5',1],['NOTA_7','BRG_6',1],['NOTA_7','BRG_7',1],['NOTA_7','BRG_8',1],
-      ['NOTA_8','BRG_5',1],['NOTA_8','BRG_9',1],
-      ['NOTA_9','BRG_5',10],
-      ['NOTA_10','BRG_2',3],['NOTA_10','BRG_1',1],
-    ]
-  );
-  // After writing item rows directly, decrement BARANG.STOCK to reflect sold quantities
-  try{
-    // compute total sold per kode from the seeded rows above
-    const seededItems = [
-      ['NOTA_1','BRG_1',2],['NOTA_1','BRG_2',2],
-      ['NOTA_2','BRG_6',1],
-      ['NOTA_3','BRG_4',1],['NOTA_3','BRG_7',1],['NOTA_3','BRG_6',1],
-      ['NOTA_4','BRG_9',2],['NOTA_4','BRG_10',2],
-      ['NOTA_5','BRG_3',1],
-      ['NOTA_6','BRG_7',1],['NOTA_6','BRG_5',1],['NOTA_6','BRG_3',1],
-      ['NOTA_7','BRG_5',1],['NOTA_7','BRG_6',1],['NOTA_7','BRG_7',1],['NOTA_7','BRG_8',1],
-      ['NOTA_8','BRG_5',1],['NOTA_8','BRG_9',1],
-      ['NOTA_9','BRG_5',10],
-      ['NOTA_10','BRG_2',3],['NOTA_10','BRG_1',1],
-    ];
-    const soldMap = {};
-    seededItems.forEach(r => { const kode = r[1]; const q = Number(r[2]||0); if(!kode) return; soldMap[kode] = (soldMap[kode] || 0) + (isNaN(q)?0:q); });
-    // apply stock adjustments (decrement)
-    Object.keys(soldMap).forEach(kode => {
-      try{
-        const qty = soldMap[kode];
-        if(qty && qty > 0) adjustStock(kode, -Math.abs(qty));
-      }catch(e){ Logger.log('seedAll: adjustStock failed for ' + kode + ' => ' + e); }
-    });
-  }catch(se){ Logger.log('seedAll: failed to apply stock adjustments: ' + se); }
+  // ITEM_PENJUALAN (use seededItems defined above)
+  setHeadersAndRows_Menu('ITEM_PENJUALAN', TABLES.item_penjualan.headers, seededItems);
 }
 
 // Clear: hapus baris data, header tetap
