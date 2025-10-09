@@ -246,9 +246,62 @@ async function renderRevenuePerMonth(container, year){
       const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', String(x + barW/2)); label.setAttribute('y', String(height - 10)); label.setAttribute('font-size','11'); label.setAttribute('fill','#475569'); label.setAttribute('text-anchor','middle'); label.textContent = monthNames[i]; svg.appendChild(label);
     });
 
-    // top-left summary
-    const title = document.createElementNS(svgNS, 'text'); title.setAttribute('x','6'); title.setAttribute('y','14'); title.setAttribute('font-size','13'); title.setAttribute('fill','#0F172A'); title.setAttribute('font-weight','600'); title.textContent = `Penghasilan ${year}`; svg.appendChild(title);
-    const totalText = document.createElementNS(svgNS, 'text'); totalText.setAttribute('x','6'); totalText.setAttribute('y','32'); totalText.setAttribute('font-size','12'); totalText.setAttribute('fill','#475569'); totalText.textContent = formatCurrency(total); svg.appendChild(totalText);
+    // top-left title only (total hidden; will show on hover)
+    const title = document.createElementNS(svgNS, 'text'); title.setAttribute('x','6'); title.setAttribute('y','16'); title.setAttribute('font-size','13'); title.setAttribute('fill','#0F172A'); title.setAttribute('font-weight','600'); title.textContent = `Penghasilan ${year}`; svg.appendChild(title);
+    // create a tooltip for revenue bars
+    container.style.position = container.style.position || 'relative';
+    const revTooltip = document.createElement('div');
+    revTooltip.className = 'revenue-tooltip';
+    revTooltip.style.position = 'absolute';
+    revTooltip.style.pointerEvents = 'none';
+    revTooltip.style.display = 'none';
+    revTooltip.style.background = 'white';
+    revTooltip.style.border = '1px solid rgba(15,23,42,0.08)';
+    revTooltip.style.boxShadow = '0 6px 18px rgba(2,6,23,0.08)';
+    revTooltip.style.padding = '6px 8px';
+    revTooltip.style.borderRadius = '6px';
+    revTooltip.style.fontSize = '13px';
+    revTooltip.style.zIndex = '12';
+    container.appendChild(revTooltip);
+
+    // attach hover handlers to bars (rect elements)
+    const rects = Array.from(svg.querySelectorAll('rect'));
+    rects.forEach((r, i) => {
+      const val = months[i].value || 0;
+      const month = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][i];
+      r.setAttribute('data-value', String(val));
+      r.setAttribute('data-month', month);
+      r.setAttribute('role','img');
+      r.setAttribute('aria-label', `${month} ${year}: ${formatCurrency(val)}`);
+      r.style.cursor = 'pointer';
+      r.addEventListener('mouseenter', (ev) => {
+        revTooltip.innerHTML = `<div style="font-weight:600">${month} ${year}</div><div style="color:#475569;margin-top:4px">${formatCurrency(val)}</div>`;
+        revTooltip.style.display = 'block';
+        // position
+        try{
+          const rect = container.getBoundingClientRect();
+          const x = ev.clientX - rect.left + 8; const y = ev.clientY - rect.top + 8;
+          const tw = revTooltip.offsetWidth || 120; const th = revTooltip.offsetHeight || 28;
+          const left = Math.min(Math.max(8, x), Math.max(8, rect.width - tw - 12));
+          const top = Math.min(Math.max(8, y), Math.max(8, rect.height - th - 12));
+          revTooltip.style.left = left + 'px';
+          revTooltip.style.top = top + 'px';
+        }catch(e){}
+      });
+      r.addEventListener('mousemove', (ev) => {
+        try{
+          const rect = container.getBoundingClientRect();
+          const x = ev.clientX - rect.left + 8; const y = ev.clientY - rect.top + 8;
+          const tw = revTooltip.offsetWidth || 120; const th = revTooltip.offsetHeight || 28;
+          const left = Math.min(Math.max(8, x), Math.max(8, rect.width - tw - 12));
+          const top = Math.min(Math.max(8, y), Math.max(8, rect.height - th - 12));
+          revTooltip.style.left = left + 'px';
+          revTooltip.style.top = top + 'px';
+        }catch(e){}
+      });
+      r.addEventListener('mouseleave', () => { revTooltip.style.display = 'none'; });
+    });
+
     container.appendChild(svg);
   }catch(e){ console.warn('renderRevenuePerMonth err', e); container.innerHTML = '<div class="text-muted">Gagal memuat penghasilan.</div>'; }
 }
