@@ -41,20 +41,39 @@ async function loadDashboardData(){
     const elB = document.getElementById('count-barang'); if (elB) elB.textContent = String(barang.length || 0);
     const elS = document.getElementById('count-penjualan'); if (elS) elS.textContent = String(penjualan.length || 0);
 
-    // total revenue: prefer penjualan.SUBTOTAL, fallback to items grouping
-    let totalRevenue = 0;
-    // build itemsByNota map
+    // total revenue: compute primarily from item_penjualan to avoid mismatch
+    // Build barang price map for fallback when item row doesn't include HARGA
+    const priceMap = {};
+    barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = Number(b.HARGA || 0); });
+
+    // build itemsByNota map and sum items total
     const itemsByNota = {};
-    items.forEach(it => { const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || ''); if(!nota) return; (itemsByNota[nota] = itemsByNota[nota] || []).push(it); });
-    penjualan.forEach(p => {
-      let sub = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
-      if (!sub || sub <= 0){
-        const nota = String(p.NOTA || p.NOMOR || p.NO || '');
-        const its = itemsByNota[nota] || [];
-        sub = its.reduce((s,it) => s + (Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0), 0);
-      }
-      totalRevenue += sub || 0;
+    let itemsTotal = 0;
+    items.forEach(it => {
+      const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '');
+      const qty = Number(it.QTY || it.QTY_PENJUALAN || 0) || 0;
+      const subGiven = Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0;
+      const kode = String(it.KODE_BARANG || it.KODE || '');
+      const harga = Number(it.HARGA || 0) || priceMap[kode] || 0;
+      const computed = subGiven && subGiven > 0 ? subGiven : (qty * harga);
+      itemsTotal += Number(computed) || 0;
+      if (!nota) return;
+      (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
     });
+
+    // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
+    let penjualanOnlyTotal = 0;
+    penjualan.forEach(p => {
+      const nota = String(p.NOTA || p.NOMOR || p.NO || '');
+      if (nota && (itemsByNota[nota] && itemsByNota[nota].length > 0)) {
+        // invoice has item rows -> already counted via itemsTotal
+        return;
+      }
+      const sub = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
+      penjualanOnlyTotal += sub;
+    });
+
+    const totalRevenue = itemsTotal + penjualanOnlyTotal;
     const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
 
     return { pelanggan, barang, penjualan, items, totalRevenue };
