@@ -44,18 +44,40 @@ async function loadDashboardData(){
     // total revenue: compute primarily from item_penjualan to avoid mismatch
     // Build barang price map for fallback when item row doesn't include HARGA
     const priceMap = {};
-    barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = Number(b.HARGA || 0); });
+    // helper: robust parse for currency/number strings (handles '1.234.567' etc.)
+    function parseNumber(v){
+      if (v == null || v === '') return 0;
+      if (typeof v === 'number' && !isNaN(v)) return v;
+      let s = String(v).trim();
+      s = s.replace(/[^0-9.,-]/g, '');
+      if (!s) return 0;
+      const lastDot = s.lastIndexOf('.');
+      const lastComma = s.lastIndexOf(',');
+      if (lastComma > lastDot){ s = s.replace(/\./g, '').replace(',', '.'); }
+      else if (lastDot > lastComma && (s.match(/\./g)||[]).length > 1){ s = s.replace(/\./g, ''); }
+      else { s = s.replace(/,/g, ''); }
+      const n = Number(s);
+      return isNaN(n) ? 0 : n;
+    }
+    function normalizeNota(x){
+      if (x == null) return '';
+      const s = String(x).trim().toLowerCase();
+      const cleaned = s.replace(/^(inv|nota|no|no\.|np)\s*/i, '').replace(/[^0-9a-z]/g, '');
+      return cleaned || s.replace(/[^0-9a-z]/g,'');
+    }
+    barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = parseNumber(b.HARGA || b.HARGA_BARANG || 0); });
 
     // build itemsByNota map and sum items total
     const itemsByNota = {};
     let itemsTotal = 0;
     items.forEach(it => {
-      const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '');
-      const qty = Number(it.QTY || it.QTY_PENJUALAN || 0) || 0;
-      const subGiven = Number(it.SUBTOTAL || it.SUB_TOTAL || 0) || 0;
+      const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
+      const nota = normalizeNota(rawNota);
+      const qty = parseNumber(it.QTY || it.QTY_PENJUALAN || 0);
+      const subGiven = parseNumber(it.SUBTOTAL || it.SUB_TOTAL || 0);
       const kode = String(it.KODE_BARANG || it.KODE || '');
-      const harga = Number(it.HARGA || 0) || priceMap[kode] || 0;
-      const computed = subGiven && subGiven > 0 ? subGiven : (qty * harga);
+      const harga = parseNumber(it.HARGA || 0) || priceMap[kode] || 0;
+      const computed = (subGiven && subGiven > 0) ? subGiven : (qty * harga);
       itemsTotal += Number(computed) || 0;
       if (!nota) return;
       (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
@@ -64,12 +86,12 @@ async function loadDashboardData(){
     // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
     let penjualanOnlyTotal = 0;
     penjualan.forEach(p => {
-      const nota = String(p.NOTA || p.NOMOR || p.NO || '');
+      const rawNota = p.NOTA || p.NOMOR || p.NO || '';
+      const nota = normalizeNota(rawNota);
       if (nota && (itemsByNota[nota] && itemsByNota[nota].length > 0)) {
-        // invoice has item rows -> already counted via itemsTotal
         return;
       }
-      const sub = Number(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0) || 0;
+      const sub = parseNumber(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0);
       penjualanOnlyTotal += sub;
     });
 
