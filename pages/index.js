@@ -212,21 +212,35 @@ export default async function initDashboard(){
       salesByYear[y].total += sub;
       salesByYear[y].count += 1;
     });
-    const years = Object.keys(salesByYear).map(Number).sort((a,b)=>b-a);
+    const availableYears = Object.keys(salesByYear).map(Number).sort((a,b)=>b-a);
     const yearSelect = document.getElementById('select-year');
-    if (yearSelect && years.length>0){
+    const labelsMonths = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    if (yearSelect){
+      // Replace select UI with unbounded prev/next controls (kept inside same container)
       yearSelect.innerHTML = '';
-      years.forEach(y => { const o = document.createElement('option'); o.value = String(y); o.textContent = String(y); yearSelect.appendChild(o); });
-      yearSelect.value = String(years[0]);
-      const applyYear = (yy) => {
-        const info = salesByYear[Number(yy)] || { months: new Array(12).fill(0), total:0, count:0 };
-        renderSalesChart({ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], values: info.months, year: yy, count: info.count, total: info.total });
+      const ctrl = document.createElement('div'); ctrl.className = 'flex items-center gap-2';
+      const btnPrev = document.createElement('button'); btnPrev.type='button'; btnPrev.className='px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-primary'; btnPrev.textContent='‹';
+      const btnNext = document.createElement('button'); btnNext.type='button'; btnNext.className='px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-primary'; btnNext.textContent='›';
+      const disp = document.createElement('span'); disp.id = 'current-year-display'; disp.className='text-sm font-medium';
+      ctrl.appendChild(btnPrev); ctrl.appendChild(disp); ctrl.appendChild(btnNext);
+      yearSelect.parentNode && yearSelect.parentNode.replaceChild(ctrl, yearSelect);
+
+      // current year starts at max available year or this year
+      let currentYear = availableYears.length ? Math.max(...availableYears) : new Date().getFullYear();
+      const setYear = (y) => {
+        currentYear = Number(y);
+        disp.textContent = String(currentYear);
+        const info = salesByYear[currentYear] || { months: new Array(12).fill(0), total:0, count:0 };
+        renderSalesChart({ labels: labelsMonths, values: info.months, year: currentYear, count: info.count, total: info.total });
+        const summary = document.getElementById('sales-summary');
+        if (summary) summary.textContent = (info.count === 0) ? `Tidak ada data untuk tahun ${currentYear}` : '';
       };
-      applyYear(yearSelect.value);
-      yearSelect.addEventListener('change', (e) => { applyYear(e.target.value); });
+      setYear(currentYear);
+      btnPrev.addEventListener('click', ()=> setYear(currentYear - 1));
+      btnNext.addEventListener('click', ()=> setYear(currentYear + 1));
     } else {
-      // no penjualan data, render empty sales
-      renderSalesChart({ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], values: new Array(12).fill(0), year: new Date().getFullYear(), count:0, total:0 });
+      // fallback: render empty sales
+      renderSalesChart({ labels: labelsMonths, values: new Array(12).fill(0), year: new Date().getFullYear(), count:0, total:0 });
     }
 
   }catch(e){ console.error('[page:index] analytics init failed', e); }
