@@ -94,7 +94,28 @@ export default async function initDashboard(){
     card.addEventListener('keydown', (e)=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
   });
 
-  // charts removed: stock & revenue charts were cleaned up per user request
+  // charts are opt-in: add a small toggle to load charts lazily to avoid breaking the dashboard
+  try{
+    const container = document.querySelector('.cards') || document.getElementById('cards') || document.body;
+    const ctl = document.createElement('div'); ctl.className = 'mt-3';
+    const btn = document.createElement('button'); btn.className = 'px-3 py-1 text-sm bg-primary text-white rounded'; btn.type = 'button'; btn.textContent = 'Tampilkan Grafik Penjualan';
+    ctl.appendChild(btn);
+    container.parentNode && container.parentNode.insertBefore(ctl, container.nextSibling);
+    let chartInst = null;
+    btn.addEventListener('click', async () => {
+      if (chartInst) { chartInst.destroy(); chartInst = null; btn.textContent = 'Tampilkan Grafik Penjualan'; return; }
+      btn.textContent = 'Memuat...';
+      try{
+        const mod = await import('../components/chart-yearly.js');
+        chartInst = await mod.mountYearlyChart(document.body, await loadDashboardData());
+        btn.textContent = 'Sembunyikan Grafik';
+      }catch(e){
+        console.error('[page:index] failed to load chart module', e);
+        showToast('Gagal memuat grafik', { duration: 2500 });
+        btn.textContent = 'Tampilkan Grafik Penjualan';
+      }
+    });
+  }catch(e){ /* non-fatal */ }
 }
 
 // auto-init on DOM ready
