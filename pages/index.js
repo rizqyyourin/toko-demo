@@ -215,7 +215,7 @@ async function renderRevenueChart(container, range){
     const width = Math.max(320, container.clientWidth || 400);
     const height = Math.max(200, Math.min(320, 28 * data.length));
     const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('preserveAspectRatio','xMidYMid meet');
     const max = Math.max(...data.map(d => d.value), 1);
     const rowH = Math.floor(height / data.length);
     data.forEach((d, i) => {
@@ -247,7 +247,7 @@ async function renderRevenuePerMonth(container, year){
     const width = Math.max(320, container.clientWidth || 400);
     const height = Math.max(160, 220);
     const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('preserveAspectRatio','xMidYMid meet');
     const max = Math.max(...months.map(m => m.value), 1);
     const padLeft = 72; const padRight = 16; const padTop = 8; const padBottom = 36;
     const chartW = width - padLeft - padRight;
