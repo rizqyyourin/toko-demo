@@ -136,7 +136,7 @@ async function loadDashboardData(){
     const totalRevenue = itemsTotal + penjualanOnlyTotal;
     const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
 
-    return { pelanggan, barang, penjualan, items, totalRevenue };
+    return { pelanggan, barang, penjualan, items, totalRevenue, itemsByNota, perNotaItemsSum, penjualanMapByNota };
   }catch(e){
     console.error('[page:index] loadDashboardData error', e);
     showToast('Gagal memuat data dashboard', { duration: 2500 });
@@ -160,7 +160,12 @@ export default async function initDashboard(){
   });
 
   // load dashboard data (single-fetch for required tables) and render cards
-  await loadDashboardData();
+  const data = await loadDashboardData();
+
+  // render yearly sales chart under the cards area
+  try{
+    renderYearlySalesChart(data);
+  }catch(e){ console.error('[page:index] renderYearlySalesChart failed', e); }
 
   // make cards keyboard-activatable
   document.querySelectorAll('.card').forEach(card=>{
@@ -172,6 +177,89 @@ export default async function initDashboard(){
 }
 
 // charts and helpers removed — cleaned up to simplify dashboard
+
+function monthName(idx){ return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][idx] || String(idx); }
+
+function parseYearFromDateStr(s){
+  if(!s) return null;
+  try{
+    const str = String(s).trim();
+    const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(iso) return Number(iso[1]);
+    const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if(dmy){ let yy = dmy[3]; if(yy.length===2) yy = '20'+yy; return Number(yy); }
+    const d = new Date(str);
+    if(!isNaN(d)) return d.getFullYear();
+  }catch(e){}
+  return null;
+}
+
+function canonicalNotaKeyLocal(x){ if(x==null) return ''; try{ return String(x).toUpperCase().trim().replace(/^(INV|NOTA|NO|NO\.|NP)\s*/i,'').replace(/[^0-9A-Z]/g,''); }catch(e){ return String(x).toUpperCase().replace(/[^0-9A-Z]/g,''); } }
+
+function renderYearlySalesChart(data){
+  let chartWrap = document.getElementById('yearly-sales-wrap');
+  if(!chartWrap){
+    chartWrap = document.createElement('div'); chartWrap.id='yearly-sales-wrap'; chartWrap.className='mt-6 space-y-3';
+    const cards = document.querySelector('.cards') || document.getElementById('cards');
+    if(cards && cards.parentNode) cards.parentNode.insertBefore(chartWrap, cards.nextSibling);
+    else document.body.appendChild(chartWrap);
+  }
+  chartWrap.innerHTML = '';
+
+  const years = new Set();
+  (data.penjualan||[]).forEach(p => { const y = parseYearFromDateStr(p.TGL || p.TANGGAL || p.tgl || ''); if(y) years.add(y); });
+  const now = new Date(); if(years.size===0) years.add(now.getFullYear());
+  const yearsArr = Array.from(years).sort((a,b)=>b-a);
+
+  const header = document.createElement('div'); header.className='flex items-center justify-between';
+  const title = document.createElement('h3'); title.className='text-lg font-semibold'; title.textContent = 'Grafik Penjualan per Tahun';
+  const sel = document.createElement('select'); sel.className='border px-2 py-1 rounded'; yearsArr.forEach(y=>{ const o=document.createElement('option'); o.value=String(y); o.textContent=String(y); sel.appendChild(o); }); sel.value = String(now.getFullYear());
+  const selWrap = document.createElement('div'); selWrap.className='flex items-center gap-2'; selWrap.appendChild(sel);
+  header.appendChild(title); header.appendChild(selWrap); chartWrap.appendChild(header);
+
+  const chartBox = document.createElement('div'); chartBox.className='mt-2 p-3 bg-white rounded shadow-sm'; chartWrap.appendChild(chartBox);
+
+  function computeMonthlyTotals(year){
+    const perNota = data.perNotaItemsSum || {};
+    const pen = data.penjualan || [];
+    const months = new Array(12).fill(0);
+    Object.keys(perNota).forEach(k => {
+      // find penjualan row with matching canonical key
+      const pRow = pen.find(p => canonicalNotaKeyLocal(p.ID_NOTA || p.NOTA || p.NOMOR || '') === k);
+      let iso = null;
+      if(pRow && pRow.TGL){ const s = String(pRow.TGL); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) iso = `${m[1]}-${m[2]}-${m[3]}`; else { const mm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(mm){ let yy = mm[3]; if(yy.length===2) yy='20'+yy; iso = `${yy}-${mm[2].padStart(2,'0')}-${mm[1].padStart(2,'0')}`; } } }
+      if(!iso) return; const yyyy = Number(iso.slice(0,4)); if(yyyy !== Number(year)) return; const mon = Number(iso.slice(5,7)) - 1; months[mon] += Number(perNota[k]||0);
+    });
+    return months;
+  }
+
+  function draw(year){
+    chartBox.innerHTML = '';
+    const months = computeMonthlyTotals(year);
+    const max = Math.max(1, ...months);
+    const w = 720; const h = 260; const leftAxisW = 88; const bottomH = 36; const chartW = w - leftAxisW - 24; const chartH = h - bottomH - 24;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width','100%'); svg.setAttribute('height','260');
+    // left axis
+    const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(12,12)`);
+    for(let i=0;i<=4;i++){ const y = (chartH) * (i/4); const val = Math.round(max * (1 - i/4)); const ty = y + 6; const t = document.createElementNS(svgNS,'text'); t.setAttribute('x',0); t.setAttribute('y', ty); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.textContent = 'Rp ' + Number(val).toLocaleString('id-ID'); axis.appendChild(t); }
+    svg.appendChild(axis);
+    const bars = document.createElementNS(svgNS,'g'); bars.setAttribute('transform', `translate(${leftAxisW},12)`);
+    const band = chartW / 12; const barW = band * 0.64; const gap = band - barW;
+    months.forEach((m, idx)=>{
+      const x = idx * band + gap/2;
+      const hBar = (max === 0) ? 0 : (m / max) * chartH;
+      const y = chartH - hBar;
+      const rect = document.createElementNS(svgNS,'rect'); rect.setAttribute('x', x); rect.setAttribute('y', y); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(hBar)); rect.setAttribute('fill', '#6366f1'); rect.setAttribute('rx','4'); bars.appendChild(rect);
+      const lbl = document.createElementNS(svgNS,'text'); lbl.setAttribute('x', x + barW/2); lbl.setAttribute('y', chartH + 18); lbl.setAttribute('font-size','12'); lbl.setAttribute('fill','#374151'); lbl.setAttribute('text-anchor','middle'); lbl.textContent = monthName(idx); bars.appendChild(lbl);
+    });
+    svg.appendChild(bars);
+    chartBox.appendChild(svg);
+  }
+
+  sel.addEventListener('change', ()=> draw(sel.value));
+  draw(sel.value);
+}
 
 // auto-init on DOM ready
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { initNav(); highlightActive(); initDashboard(); });
