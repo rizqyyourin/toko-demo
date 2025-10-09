@@ -256,25 +256,39 @@ async function renderRevenuePerMonth(container, year){
     const barW = Math.floor(chartW / 12) - barGap;
 
     // draw y-axis ticks (rupiah) - 4 ticks: 0, 1/3, 2/3, maxRound
-    const ticks = 4;
-    const tickVals = [];
-    for(let i=0;i<ticks;i++){ tickVals.push(Math.round((max * i) / (ticks-1))); }
-    // round tick values to nearest nice number (e.g., 1000/10000)
-    const nice = (v) => {
-      if (v <= 0) return 0;
-      const pow = Math.pow(10, Math.max(0, Math.floor(Math.log10(v)) - 2));
-      return Math.round(v / pow) * pow;
-    };
-    const niceMax = nice(max) || max;
-    const niceTicks = [];
-    for(let i=0;i<ticks;i++){ niceTicks.push(Math.round((niceMax * i) / (ticks-1))); }
+      const ticks = 4;
+      // round up to a sensible step: 100k for small, 500k for million-range
+      const roundUpTo = (v, step) => Math.ceil(v / step) * step;
+      const step = max >= 1000000 ? 500000 : 100000;
+      const niceMax = roundUpTo(max, step) || step;
+      const niceTicks = [];
+      for (let i = 0; i < ticks; i++) {
+        niceTicks.push(Math.round((niceMax * i) / (ticks - 1)));
+      }
+
+      function formatCompactRupiah(v){
+        const n = Number(v) || 0;
+        if (n >= 1000000){
+          // use juta (jt) with max 1 decimal if needed
+          const vjt = n / 1000000;
+          // remove trailing .0
+          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(vjt);
+          return s + 'jt';
+        }
+        if (n >= 1000){
+          const vrb = n / 1000;
+          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(vrb);
+          return s + 'rb';
+        }
+        return 'Rp ' + n;
+      }
 
     // grid lines and tick labels
     niceTicks.forEach((tv, idx) => {
       const y = padTop + Math.round(chartH - (tv / niceMax) * chartH);
       // horizontal grid
       const line = document.createElementNS(svgNS, 'line'); line.setAttribute('x1', String(padLeft)); line.setAttribute('x2', String(width - padRight)); line.setAttribute('y1', String(y)); line.setAttribute('y2', String(y)); line.setAttribute('stroke', 'rgba(15,23,42,0.06)'); line.setAttribute('stroke-width','1'); svg.appendChild(line);
-      const txt = document.createElementNS(svgNS, 'text'); txt.setAttribute('x','8'); txt.setAttribute('y', String(y + 4)); txt.setAttribute('font-size','11'); txt.setAttribute('fill','#475569'); txt.textContent = formatCurrency(tv); svg.appendChild(txt);
+  const txt = document.createElementNS(svgNS, 'text'); txt.setAttribute('x','8'); txt.setAttribute('y', String(y + 4)); txt.setAttribute('font-size','11'); txt.setAttribute('fill','#475569'); txt.textContent = formatCompactRupiah(tv); svg.appendChild(txt);
     });
 
     // bars and month labels (Indonesian short names)
