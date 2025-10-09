@@ -450,6 +450,27 @@ export async function load() {
     const res = await getList('penjualan');
     console.debug('[page:penjualan] load fromCache=', !!res.fromCache);
     const data = res.data || [];
+    // reconcile SUBTOTAL with item_penjualan: compute per-NOTA sums from item rows and override displayed SUBTOTAL
+    try{
+      const itRes = await getList('item_penjualan');
+      const items = itRes.data || [];
+      const itemsByNota = {};
+      function parseNumber(v){ if (v==null || v==='') return 0; if(typeof v === 'number') return v; const s=String(v).replace(/[^0-9\-\.\,]/g,''); if(!s) return 0; const n = Number(s.replace(/,/g,'')); return isNaN(n)?0:n; }
+      items.forEach(it=>{
+        const nota = String(it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '').trim();
+        if(!nota) return;
+        const sub = parseNumber(it.SUBTOTAL || it.SUB_TOTAL || (Number(it.QTY||0) * Number(it.HARGA||0)) || 0);
+        itemsByNota[nota] = (itemsByNota[nota] || 0) + (sub || 0);
+      });
+      // override data rows' SUBTOTAL when items exist for that nota
+      data.forEach(d => {
+        const nota = String(d.ID_NOTA || d.NOTA || d.ID || '').trim();
+        if(nota && itemsByNota[nota]){
+          d.SUBTOTAL = itemsByNota[nota];
+        }
+      });
+    }catch(e){ console.warn('[page:penjualan] failed to reconcile item_penjualan subtotals', e); }
+
     // also fetch pelanggan for name lookup in the KODE_PELANGGAN column
     try{ const p = await getList('pelanggan'); const pel = (p.data||[]); state.pelangganMap = {}; pel.forEach(x=>{ state.pelangganMap[x.ID_PELANGGAN || x.ID || ''] = x.NAMA || ''; }); }catch(e){ console.warn('[page:penjualan] failed to load pelanggan for name map', e); }
     await renderList(data);
