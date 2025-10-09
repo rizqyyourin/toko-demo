@@ -94,13 +94,8 @@
                 <div class="text-xs text-muted">Urutkan per hari/minggu/bulan/tahun</div>
               </div>
               <div class="flex items-center gap-2">
-                <label for="revenue-range" class="sr-only">Range</label>
-                <select id="revenue-range" class="text-sm border border-border rounded-md bg-white px-2 py-1">
-                  <option value="day">Per Hari</option>
-                  <option value="week">Per Minggu</option>
-                  <option value="month" selected>Per Bulan</option>
-                  <option value="year">Per Tahun</option>
-                </select>
+                <label for="revenue-year" class="sr-only">Tahun</label>
+                <input id="revenue-year" type="number" min="2000" max="2100" class="text-sm border border-border rounded-md bg-white px-2 py-1 w-28" aria-label="Pilih tahun" />
               </div>
             </div>
             <div id="revenue-chart" class="w-full flex-1"></div>

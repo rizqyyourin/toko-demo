@@ -82,14 +82,18 @@ export default async function initDashboard(){
       // also initialize revenue chart if present
       const revenueEl = document.getElementById('revenue-chart');
       if (revenueEl) {
-        const rangeSel = document.getElementById('revenue-range');
-        // default range
-        const range = (rangeSel && rangeSel.value) || 'month';
-        renderRevenueChart(revenueEl, range);
-        if (rangeSel) rangeSel.addEventListener('change', () => renderRevenueChart(revenueEl, rangeSel.value));
+        const yearInput = document.getElementById('revenue-year');
+        const currentYear = new Date().getFullYear();
+        if (yearInput) {
+          yearInput.value = String(currentYear);
+          yearInput.addEventListener('change', () => renderRevenuePerMonth(revenueEl, Number(yearInput.value) || currentYear));
+          // allow mouse wheel to increment/decrement year when focused
+          yearInput.addEventListener('wheel', (e) => { e.preventDefault(); const v = Number(yearInput.value) || currentYear; yearInput.value = String(v + (e.deltaY > 0 ? -1 : 1)); yearInput.dispatchEvent(new Event('change')); });
+        }
+        renderRevenuePerMonth(revenueEl, currentYear);
         // re-render on resize
         let rt;
-        window.addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=> renderRevenueChart(revenueEl, (rangeSel && rangeSel.value) || 'month'), 200); });
+        window.addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=> renderRevenuePerMonth(revenueEl, Number(yearInput && yearInput.value) || currentYear), 200); });
       }
       // re-render on resize
       let t;
@@ -181,6 +185,42 @@ async function renderRevenueChart(container, range){
     });
     container.appendChild(svg);
   }catch(e){ console.warn('renderRevenueChart err', e); container.innerHTML = '<div class="text-muted">Gagal memuat penghasilan.</div>'; }
+}
+
+async function renderRevenuePerMonth(container, year){
+  container.innerHTML = '';
+  try{
+    const items = await fetchRevenueItems();
+    // filter items by year
+    const months = Array.from({length:12}, (_,i) => ({ key: String(i+1).padStart(2,'0'), value: 0 }));
+    items.forEach(it => {
+      const d = new Date(it.tgl);
+      if (isNaN(d)) return;
+      if (d.getFullYear() !== Number(year)) return;
+      const m = d.getMonth();
+      months[m].value += Number(it.subtotal) || 0;
+    });
+    const total = months.reduce((s,m) => s + m.value, 0);
+    if (!total){ container.innerHTML = '<div class="text-muted">Tidak ada data penghasilan untuk tahun ini.</div>'; return; }
+    const width = Math.max(320, container.clientWidth || 400);
+    const height = Math.max(160, 220);
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const max = Math.max(...months.map(m => m.value), 1);
+    const padLeft = 48; const padRight = 16; const chartW = width - padLeft - padRight;
+    const barW = Math.floor(chartW / 12) - 8;
+    months.forEach((m, i) => {
+      const x = padLeft + i * (barW + 8);
+      const h = Math.round((m.value / max) * (height - 40));
+      const y = height - h - 24;
+      const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', String(x)); rect.setAttribute('y', String(y)); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(h)); rect.setAttribute('fill', '#6366F1'); rect.setAttribute('rx','4'); svg.appendChild(rect);
+      const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', String(x + barW/2)); label.setAttribute('y', String(height - 6)); label.setAttribute('font-size','11'); label.setAttribute('fill','#475569'); label.setAttribute('text-anchor','middle'); label.textContent = String(i+1); svg.appendChild(label);
+    });
+    // top-left summary
+    const title = document.createElementNS(svgNS, 'text'); title.setAttribute('x','6'); title.setAttribute('y','14'); title.setAttribute('font-size','13'); title.setAttribute('fill','#0F172A'); title.setAttribute('font-weight','600'); title.textContent = `Penghasilan ${year}`; svg.appendChild(title);
+    const totalText = document.createElementNS(svgNS, 'text'); totalText.setAttribute('x','6'); totalText.setAttribute('y','32'); totalText.setAttribute('font-size','12'); totalText.setAttribute('fill','#475569'); totalText.textContent = formatCurrency(total); svg.appendChild(totalText);
+    container.appendChild(svg);
+  }catch(e){ console.warn('renderRevenuePerMonth err', e); container.innerHTML = '<div class="text-muted">Gagal memuat penghasilan.</div>'; }
 }
 
 function renderStockChart(container, data){
