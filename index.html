@@ -77,42 +77,7 @@
         <h1 class="text-3xl font-extrabold">Dashboard Toko</h1>
         <p class="text-sm text-muted mt-2">Ringkasan cepat bisnis — klik kartu untuk melanjutkan ke area yang relevan.</p>
       </section>
-      <!-- Stock by category chart -->
-      <section aria-label="Stock per kategori" class="mt-8 bg-surface border border-border rounded-md p-4 pb-6 mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <h2 class="text-lg font-semibold">Total Stok per Kategori</h2>
-            <div class="text-sm text-muted">Ringkasan stok tersedia, dikelompokkan berdasarkan kategori barang.</div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 gap-4 items-start">
-          <div class="mx-auto max-w-md w-full">
-            <div class="p-3 flex items-center justify-center bg-surface rounded-md">
-              <div id="stock-chart" class="w-full h-64 md:h-72"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Revenue section: separate from stock chart to avoid height conflicts -->
-      <section aria-label="Penghasilan per bulan" class="mt-6 bg-surface border border-border rounded-md p-4 pb-6 mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <div>
-            <h2 class="text-lg font-semibold">Penghasilan</h2>
-            <div class="text-sm text-muted">Pilih tahun untuk melihat ringkasan per bulan.</div>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="prev-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">◀</button>
-            <div id="year-display" class="text-sm font-medium px-3" role="status" aria-live="polite"></div>
-            <button id="next-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">▶</button>
-          </div>
-        </div>
-        <div class="mx-auto max-w-md w-full">
-          <div class="p-3 flex items-center justify-center bg-surface rounded-md">
-            <div id="revenue-chart" class="w-full h-64 md:h-72"></div>
-          </div>
-        </div>
-      </section>
+      <!-- charts removed (stock & revenue) per user request -->
 
 
   <section aria-label="Dashboard cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
