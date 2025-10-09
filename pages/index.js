@@ -207,13 +207,18 @@ function renderYearlySalesChart(data){
   chartWrap.innerHTML = '';
 
   const years = new Set();
+  // collect years from penjualan TGL and item-level TGL if present
   (data.penjualan||[]).forEach(p => { const y = parseYearFromDateStr(p.TGL || p.TANGGAL || p.tgl || ''); if(y) years.add(y); });
+  // also scan item rows for date-like fields (some seeds may include TGL on items)
+  (data.items || []).forEach(it => { const y = parseYearFromDateStr(it.TGL || it.tgl || it.Tanggal || ''); if(y) years.add(y); });
   const now = new Date(); if(years.size===0) years.add(now.getFullYear());
   const yearsArr = Array.from(years).sort((a,b)=>b-a);
 
   const header = document.createElement('div'); header.className='flex items-center justify-between';
   const title = document.createElement('h3'); title.className='text-lg font-semibold'; title.textContent = 'Grafik Penjualan per Tahun';
-  const sel = document.createElement('select'); sel.className='border px-2 py-1 rounded'; yearsArr.forEach(y=>{ const o=document.createElement('option'); o.value=String(y); o.textContent=String(y); sel.appendChild(o); }); sel.value = String(now.getFullYear());
+  const sel = document.createElement('select'); sel.className='border px-2 py-1 rounded'; yearsArr.forEach(y=>{ const o=document.createElement('option'); o.value=String(y); o.textContent=String(y); sel.appendChild(o); });
+  // default to most recent available year
+  const defaultYear = yearsArr.length ? yearsArr[0] : now.getFullYear(); sel.value = String(defaultYear);
   const selWrap = document.createElement('div'); selWrap.className='flex items-center gap-2'; selWrap.appendChild(sel);
   header.appendChild(title); header.appendChild(selWrap); chartWrap.appendChild(header);
 
@@ -228,6 +233,9 @@ function renderYearlySalesChart(data){
       const pRow = pen.find(p => canonicalNotaKeyLocal(p.ID_NOTA || p.NOTA || p.NOMOR || '') === k);
       let iso = null;
       if(pRow && pRow.TGL){ const s = String(pRow.TGL); const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) iso = `${m[1]}-${m[2]}-${m[3]}`; else { const mm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(mm){ let yy = mm[3]; if(yy.length===2) yy='20'+yy; iso = `${yy}-${mm[2].padStart(2,'0')}-${mm[1].padStart(2,'0')}`; } } }
+      // fallback: look at item rows for this nota and see if any item has a TGL
+      if(!iso){ const itemsForNota = (data.itemsByNota && data.itemsByNota[k]) || []; for(const it of itemsForNota){ const y = parseYearFromDateStr(it.TGL || it.tgl || it.Tanggal || ''); if(y){ // build iso from that item if possible (approximate to month-day 01)
+            const m = String(y); iso = `${m}-01-01`; break; } } }
       if(!iso) return; const yyyy = Number(iso.slice(0,4)); if(yyyy !== Number(year)) return; const mon = Number(iso.slice(5,7)) - 1; months[mon] += Number(perNota[k]||0);
     });
     return months;
@@ -241,8 +249,8 @@ function renderYearlySalesChart(data){
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('viewBox', `0 0 ${w} ${h}`); svg.setAttribute('width','100%'); svg.setAttribute('height','260');
     // left axis
-    const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(12,12)`);
-    for(let i=0;i<=4;i++){ const y = (chartH) * (i/4); const val = Math.round(max * (1 - i/4)); const ty = y + 6; const t = document.createElementNS(svgNS,'text'); t.setAttribute('x',0); t.setAttribute('y', ty); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.textContent = 'Rp ' + Number(val).toLocaleString('id-ID'); axis.appendChild(t); }
+  const axis = document.createElementNS(svgNS,'g'); axis.setAttribute('transform', `translate(12,12)`);
+  for(let i=0;i<=4;i++){ const y = (chartH) * (i/4); const val = Math.round(max * (1 - i/4)); const ty = y + 6; const t = document.createElementNS(svgNS,'text'); t.setAttribute('x',0); t.setAttribute('y', ty); t.setAttribute('font-size','12'); t.setAttribute('fill','#374151'); t.textContent = formatCurrency(val); axis.appendChild(t); }
     svg.appendChild(axis);
     const bars = document.createElementNS(svgNS,'g'); bars.setAttribute('transform', `translate(${leftAxisW},12)`);
     const band = chartW / 12; const barW = band * 0.64; const gap = band - barW;
