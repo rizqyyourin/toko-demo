@@ -79,11 +79,81 @@ export default async function initDashboard(){
       });
       const data = Object.keys(byCat).map(cat => ({ kategori: cat, stock: byCat[cat] })).sort((a,b)=> b.stock - a.stock);
       renderStockChart(chartEl, data);
+      // also initialize revenue chart if present
+      const revenueEl = document.getElementById('revenue-chart');
+      if (revenueEl) {
+        const rangeSel = document.getElementById('revenue-range');
+        // default range
+        const range = (rangeSel && rangeSel.value) || 'month';
+        renderRevenueChart(revenueEl, range);
+        if (rangeSel) rangeSel.addEventListener('change', () => renderRevenueChart(revenueEl, rangeSel.value));
+        // re-render on resize
+        let rt;
+        window.addEventListener('resize', ()=>{ clearTimeout(rt); rt = setTimeout(()=> renderRevenueChart(revenueEl, (rangeSel && rangeSel.value) || 'month'), 200); });
+      }
       // re-render on resize
       let t;
       window.addEventListener('resize', ()=>{ clearTimeout(t); t = setTimeout(()=> renderStockChart(chartEl, data), 150); });
     }
   }catch(e){ console.warn('[page:index] failed to render stock chart', e); }
+}
+
+// revenue helpers: aggregate item_penjualan by date range
+async function fetchRevenueItems(){
+  const res = await getList('item_penjualan', { useCache: false });
+  return (res.data || []).map(r => ({
+    tgl: r.TGL || r.TANGGAL || r.DATE || r.TGL_PENJUALAN || '',
+    subtotal: Number(r.SUBTOTAL || r.SUB_TOTAL || r.HARGA || 0) || 0
+  })).filter(x => x.subtotal && x.tgl);
+}
+
+function bucketBy(items, range){
+  const buckets = {};
+  items.forEach(it => {
+    const d = new Date(it.tgl);
+    if (isNaN(d)) return;
+    let key;
+    if (range === 'day') key = d.toISOString().slice(0,10);
+    else if (range === 'week') { const w = getWeekNumber(d); key = `${d.getFullYear()}-W${w}`; }
+    else if (range === 'month') key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    else if (range === 'year') key = `${d.getFullYear()}`;
+    buckets[key] = (buckets[key] || 0) + (Number(it.subtotal) || 0);
+  });
+  // convert to sorted array
+  return Object.keys(buckets).sort().map(k => ({ key: k, value: buckets[k] }));
+}
+
+function getWeekNumber(d){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+  return String(weekNo).padStart(2,'0');
+}
+
+async function renderRevenueChart(container, range){
+  container.innerHTML = '';
+  try{
+    const items = await fetchRevenueItems();
+    if (!items.length){ container.innerHTML = '<div class="text-muted">Tidak ada data penghasilan.</div>'; return; }
+    const data = bucketBy(items, range);
+    // simple horizontal bar chart using SVG
+    const width = Math.max(320, container.clientWidth || 400);
+    const height = Math.max(200, Math.min(320, 28 * data.length));
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg'); svg.setAttribute('width','100%'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const max = Math.max(...data.map(d => d.value), 1);
+    const rowH = Math.floor(height / data.length);
+    data.forEach((d, i) => {
+      const y = i * rowH;
+      const barW = Math.max(4, Math.round((d.value / max) * (width * 0.6)));
+      const label = document.createElementNS(svgNS, 'text'); label.setAttribute('x', 6); label.setAttribute('y', y + rowH/2 + 4); label.setAttribute('font-size','11'); label.setAttribute('fill','#0F172A'); label.textContent = d.key; svg.appendChild(label);
+      const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', width * 0.35); rect.setAttribute('y', y + 6); rect.setAttribute('width', String(barW)); rect.setAttribute('height', String(Math.max(8, rowH - 12))); rect.setAttribute('fill','#6366F1'); svg.appendChild(rect);
+      const val = document.createElementNS(svgNS, 'text'); val.setAttribute('x', width * 0.35 + barW + 8); val.setAttribute('y', y + rowH/2 + 4); val.setAttribute('font-size','11'); val.setAttribute('fill','#475569'); val.textContent = formatCurrency(d.value); svg.appendChild(val);
+    });
+    container.appendChild(svg);
+  }catch(e){ console.warn('renderRevenueChart err', e); container.innerHTML = '<div class="text-muted">Gagal memuat penghasilan.</div>'; }
 }
 
 function renderStockChart(container, data){

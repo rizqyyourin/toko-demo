@@ -85,7 +85,27 @@
             <div class="text-sm text-muted">Ringkasan stok tersedia, dikelompokkan berdasarkan kategori barang.</div>
           </div>
         </div>
-        <div id="stock-chart" class="w-full h-64"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div id="stock-chart" class="w-full h-64"></div>
+          <div id="revenue-area" class="w-full h-64 flex flex-col">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h3 class="text-sm font-medium">Penghasilan</h3>
+                <div class="text-xs text-muted">Urutkan per hari/minggu/bulan/tahun</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <label for="revenue-range" class="sr-only">Range</label>
+                <select id="revenue-range" class="text-sm border border-border rounded-md bg-white px-2 py-1">
+                  <option value="day">Per Hari</option>
+                  <option value="week">Per Minggu</option>
+                  <option value="month" selected>Per Bulan</option>
+                  <option value="year">Per Tahun</option>
+                </select>
+              </div>
+            </div>
+            <div id="revenue-chart" class="w-full flex-1"></div>
+          </div>
+        </div>
       </section>
 
   <section aria-label="Dashboard cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
