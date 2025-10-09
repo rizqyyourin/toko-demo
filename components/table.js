@@ -29,8 +29,26 @@ export function createTable({ columns = [], rows = [], rowKey = null, classes = 
   const td = document.createElement('td');
   td.className = `px-3 py-2 text-sm text-text ${col.tdClass || ''}`;
       let v = r[col.field];
-      if (col.render) td.appendChild(col.render(v, r));
-      else td.textContent = (v == null) ? '' : String(v);
+      if (col.render) {
+        try {
+          const out = col.render(v, r);
+          // handle several possible return shapes from render: Node, string/primitive, array
+          if (out instanceof Node) {
+            td.appendChild(out);
+          } else if (Array.isArray(out)) {
+            out.forEach(item => {
+              if (item instanceof Node) td.appendChild(item);
+              else td.appendChild(document.createTextNode(item == null ? '' : String(item)));
+            });
+          } else {
+            td.textContent = out == null ? '' : String(out);
+          }
+        } catch (e) {
+          // fallback: render as text on unexpected errors
+          td.textContent = v == null ? '' : String(v);
+          console.debug('[table] render callback failed', e);
+        }
+      } else td.textContent = (v == null) ? '' : String(v);
       if (col.title) td.title = td.textContent;
       tr.appendChild(td);
     }
