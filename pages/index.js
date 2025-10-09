@@ -119,19 +119,22 @@ function renderStockChart(container, data){
     const x2 = cx + radius * Math.cos(end);
     const y2 = cy + radius * Math.sin(end);
 
-    const path = document.createElementNS(svgNS, 'path');
-    const dPath = `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-    path.setAttribute('d', dPath);
-    path.setAttribute('fill', palette[i % palette.length]);
-    path.setAttribute('stroke', '#fff');
-    path.setAttribute('stroke-width', '1');
-    path.setAttribute('data-kategori', d.kategori);
-    path.setAttribute('data-stock', String(d.stock));
-    path.setAttribute('role','img');
-    path.setAttribute('aria-label', `${d.kategori}: ${d.stock}`);
-    // tooltip-like title
-    const title = document.createElementNS(svgNS, 'title'); title.textContent = `${d.kategori}: ${d.stock}`; path.appendChild(title);
-    svg.appendChild(path);
+  const path = document.createElementNS(svgNS, 'path');
+  const dPath = `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  path.setAttribute('d', dPath);
+  path.setAttribute('fill', palette[i % palette.length]);
+  path.setAttribute('stroke', '#fff');
+  path.setAttribute('stroke-width', '1');
+  path.setAttribute('data-kategori', d.kategori);
+  path.setAttribute('data-stock', String(d.stock));
+  path.setAttribute('role','img');
+  path.setAttribute('aria-label', `${d.kategori}: ${d.stock}`);
+  // store mid-angle for explode direction
+  const mid = (start + end) / 2;
+  path.setAttribute('data-mid', String(mid));
+  // tooltip-like title
+  const title = document.createElementNS(svgNS, 'title'); title.textContent = `${d.kategori}: ${d.stock}`; path.appendChild(title);
+  svg.appendChild(path);
 
     angle = end;
   });
@@ -152,16 +155,13 @@ function renderStockChart(container, data){
   tooltip.style.zIndex = '10';
   container.appendChild(tooltip);
 
-  // center label: total (kept but smaller)
-  const centerLabel = document.createElementNS(svgNS, 'text'); centerLabel.setAttribute('x', cx); centerLabel.setAttribute('y', cy); centerLabel.setAttribute('text-anchor','middle'); centerLabel.setAttribute('font-size','13'); centerLabel.setAttribute('fill','#0F172A'); centerLabel.setAttribute('font-weight','600'); centerLabel.textContent = String(total); svg.appendChild(centerLabel);
+  // (removed center total label per UX request)
 
   // attach hover handlers and interaction
   const paths = Array.from(svg.querySelectorAll('path'));
   paths.forEach((path, idx) => {
-    // store mid-angle for explode direction
-    const start = Number(path.getAttribute('data-start')) || 0;
-    const end = Number(path.getAttribute('data-end')) || 0;
-    const mid = (start + end) / 2;
+  // read stored mid-angle for explode direction
+  const mid = Number(path.getAttribute('data-mid')) || 0;
     path.style.transition = 'transform 0.18s ease, opacity 0.12s ease, stroke-width 0.12s ease';
     path.addEventListener('mouseenter', (ev) => {
       // dim others
@@ -175,11 +175,11 @@ function renderStockChart(container, data){
       try{
         const kategori = path.getAttribute('data-kategori') || '';
         const stock = Number(path.getAttribute('data-stock') || 0) || 0;
-        const pct = ((stock / total) * 100).toFixed(1) + '%';
-        tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">${stock} — ${pct}</div>`;
+        // show clearer detail without percent: "KATEGORI stok N barang"
+        tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">${kategori} stok ${stock} barang</div>`;
         const rect = container.getBoundingClientRect();
         const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
-        tooltip.style.left = Math.min(rect.width - 140, x) + 'px';
+        tooltip.style.left = Math.min(rect.width - 220, x) + 'px';
         tooltip.style.top = Math.min(rect.height - 60, y) + 'px';
         tooltip.style.display = 'block';
       }catch(e){}
