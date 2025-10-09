@@ -136,18 +136,63 @@ function renderStockChart(container, data){
     angle = end;
   });
 
-  // legend on the right
-  const legendX = Math.max(cx + radius + 20, width * 0.55);
-  const legendY = 20;
-  const lineH = 20;
-  data.forEach((d,i) => {
-    const y = legendY + i * (lineH + 6);
-    const rect = document.createElementNS(svgNS, 'rect'); rect.setAttribute('x', legendX); rect.setAttribute('y', y); rect.setAttribute('width', '14'); rect.setAttribute('height', '14'); rect.setAttribute('fill', palette[i % palette.length]); svg.appendChild(rect);
-    const txt = document.createElementNS(svgNS, 'text'); txt.setAttribute('x', legendX + 20); txt.setAttribute('y', y + 11); txt.setAttribute('font-size', '12'); txt.setAttribute('fill', '#0F172A'); txt.textContent = `${d.kategori} (${d.stock})`; svg.appendChild(txt);
-  });
+  // interactive tooltip
+  container.style.position = container.style.position || 'relative';
+  const tooltip = document.createElement('div');
+  tooltip.className = 'stock-tooltip';
+  tooltip.style.position = 'absolute';
+  tooltip.style.pointerEvents = 'none';
+  tooltip.style.display = 'none';
+  tooltip.style.background = 'white';
+  tooltip.style.border = '1px solid rgba(15,23,42,0.08)';
+  tooltip.style.boxShadow = '0 6px 18px rgba(2,6,23,0.08)';
+  tooltip.style.padding = '8px 10px';
+  tooltip.style.borderRadius = '6px';
+  tooltip.style.fontSize = '13px';
+  tooltip.style.zIndex = '10';
+  container.appendChild(tooltip);
 
-  // center label: total
-  const centerLabel = document.createElementNS(svgNS, 'text'); centerLabel.setAttribute('x', cx); centerLabel.setAttribute('y', cy); centerLabel.setAttribute('text-anchor','middle'); centerLabel.setAttribute('font-size','14'); centerLabel.setAttribute('fill','#0F172A'); centerLabel.setAttribute('font-weight','600'); centerLabel.textContent = String(total); svg.appendChild(centerLabel);
+  // center label: total (kept but smaller)
+  const centerLabel = document.createElementNS(svgNS, 'text'); centerLabel.setAttribute('x', cx); centerLabel.setAttribute('y', cy); centerLabel.setAttribute('text-anchor','middle'); centerLabel.setAttribute('font-size','13'); centerLabel.setAttribute('fill','#0F172A'); centerLabel.setAttribute('font-weight','600'); centerLabel.textContent = String(total); svg.appendChild(centerLabel);
+
+  // attach hover handlers and interaction
+  const paths = Array.from(svg.querySelectorAll('path'));
+  paths.forEach((path, idx) => {
+    // store mid-angle for explode direction
+    const start = Number(path.getAttribute('data-start')) || 0;
+    const end = Number(path.getAttribute('data-end')) || 0;
+    const mid = (start + end) / 2;
+    path.style.transition = 'transform 0.18s ease, opacity 0.12s ease, stroke-width 0.12s ease';
+    path.addEventListener('mouseenter', (ev) => {
+      // dim others
+      paths.forEach(p => { p.style.opacity = '0.35'; });
+      path.style.opacity = '1';
+      path.style.strokeWidth = '2';
+      // explode outward
+      const dx = Math.cos(mid) * 8; const dy = Math.sin(mid) * 8;
+      path.setAttribute('transform', `translate(${dx} ${dy})`);
+      // show tooltip
+      try{
+        const kategori = path.getAttribute('data-kategori') || '';
+        const stock = Number(path.getAttribute('data-stock') || 0) || 0;
+        const pct = ((stock / total) * 100).toFixed(1) + '%';
+        tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">${stock} — ${pct}</div>`;
+        const rect = container.getBoundingClientRect();
+        const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
+        tooltip.style.left = Math.min(rect.width - 140, x) + 'px';
+        tooltip.style.top = Math.min(rect.height - 60, y) + 'px';
+        tooltip.style.display = 'block';
+      }catch(e){}
+    });
+    path.addEventListener('mousemove', (ev) => {
+      try{ const rect = container.getBoundingClientRect(); const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12; tooltip.style.left = Math.min(rect.width - 140, x) + 'px'; tooltip.style.top = Math.min(rect.height - 60, y) + 'px'; }catch(e){}
+    });
+    path.addEventListener('mouseleave', () => {
+      // restore
+      paths.forEach(p => { p.style.opacity = '1'; p.style.strokeWidth = '1'; p.removeAttribute('transform'); });
+      tooltip.style.display = 'none';
+    });
+  });
 
   container.appendChild(svg);
 }
