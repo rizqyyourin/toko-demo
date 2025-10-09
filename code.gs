@@ -79,6 +79,9 @@ function seedAll() {
       ['BRG_10','PIRING','RT',35000,18],
     ]
   );
+  // ensure STOCK column is present and backfilled where necessary
+  ensureStockColumn();
+  backfillStockIfMissing();
 
     // PENJUALAN (2025)
   setHeadersAndRows_Menu(
@@ -115,6 +118,31 @@ function seedAll() {
       ['NOTA_10','BRG_2',3],['NOTA_10','BRG_1',1],
     ]
   );
+  // After writing item rows directly, decrement BARANG.STOCK to reflect sold quantities
+  try{
+    // compute total sold per kode from the seeded rows above
+    const seededItems = [
+      ['NOTA_1','BRG_1',2],['NOTA_1','BRG_2',2],
+      ['NOTA_2','BRG_6',1],
+      ['NOTA_3','BRG_4',1],['NOTA_3','BRG_7',1],['NOTA_3','BRG_6',1],
+      ['NOTA_4','BRG_9',2],['NOTA_4','BRG_10',2],
+      ['NOTA_5','BRG_3',1],
+      ['NOTA_6','BRG_7',1],['NOTA_6','BRG_5',1],['NOTA_6','BRG_3',1],
+      ['NOTA_7','BRG_5',1],['NOTA_7','BRG_6',1],['NOTA_7','BRG_7',1],['NOTA_7','BRG_8',1],
+      ['NOTA_8','BRG_5',1],['NOTA_8','BRG_9',1],
+      ['NOTA_9','BRG_5',10],
+      ['NOTA_10','BRG_2',3],['NOTA_10','BRG_1',1],
+    ];
+    const soldMap = {};
+    seededItems.forEach(r => { const kode = r[1]; const q = Number(r[2]||0); if(!kode) return; soldMap[kode] = (soldMap[kode] || 0) + (isNaN(q)?0:q); });
+    // apply stock adjustments (decrement)
+    Object.keys(soldMap).forEach(kode => {
+      try{
+        const qty = soldMap[kode];
+        if(qty && qty > 0) adjustStock(kode, -Math.abs(qty));
+      }catch(e){ Logger.log('seedAll: adjustStock failed for ' + kode + ' => ' + e); }
+    });
+  }catch(se){ Logger.log('seedAll: failed to apply stock adjustments: ' + se); }
 }
 
 // Clear: hapus baris data, header tetap
