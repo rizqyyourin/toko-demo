@@ -61,7 +61,9 @@ function renderStockChart({ labels = [], values = [] } = {}){
     };
     // scales: when horizontal (indexAxis='y'), y should be category labels
     // numeric axis will always range 0..10_000_000 per design
-    const MAX_AXIS = 10000000;
+    // numeric axis: min=0, max = highest value in dataset (fallback to 1)
+    const maxVal = Math.max(...(values || [0]));
+    const MAX_AXIS = (maxVal && maxVal > 0) ? maxVal : 1;
     if(isMobile){
       options.scales = {
         x: { min: 0, max: MAX_AXIS, ticks: { callback: v=> Number(v).toLocaleString('id-ID') } },
@@ -90,7 +92,7 @@ function renderSalesChart({ labels = [], values = [], year = null, count = 0, to
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      scales: { y: { min: 0, max: 10000000, ticks: { callback: v=> Number(v).toLocaleString('id-ID') } } },
+  scales: { y: { min: 0, max: (Math.max(...(values||[0])) || 1), ticks: { callback: v=> Number(v).toLocaleString('id-ID') } } },
       plugins: { tooltip: { callbacks: { label(ctx){ const v = ctx.raw || 0; return `Rp ${Number(v).toLocaleString('id-ID')}`; } } }, legend: { display:false } }
     }
   };
