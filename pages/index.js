@@ -65,6 +65,15 @@ async function loadDashboardData(){
       const cleaned = s.replace(/^(inv|nota|no|no\.|np)\s*/i, '').replace(/[^0-9a-z]/g, '');
       return cleaned || s.replace(/[^0-9a-z]/g,'');
     }
+      // canonical key used across the dashboard to compare nota values reliably
+      function canonicalNotaKey(x){
+        if (x == null) return '';
+        try{
+          const s = String(x).toUpperCase().trim();
+          // remove common prefixes and non-alphanumeric characters, keep letters+digits only
+          return s.replace(/^(INV|NOTA|NO|NO\.|NP)\s*/i, '').replace(/[^0-9A-Z]/g, '');
+        }catch(e){ return String(x).toUpperCase().replace(/[^0-9A-Z]/g,''); }
+      }
     barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = parseNumber(b.HARGA || b.HARGA_BARANG || 0); });
 
     // build deduplicated per-nota item sums
@@ -73,22 +82,23 @@ async function loadDashboardData(){
     const seenItemKeys = new Set();
     let duplicateItems = 0;
     items.forEach(it => {
-      const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
-      const nota = normalizeNota(rawNota);
+  const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
+  const nota = normalizeNota(rawNota);
+  const keyNota = canonicalNotaKey(rawNota);
       const qty = parseNumber(it.QTY || it.QTY_PENJUALAN || 0);
       const subGiven = parseNumber(it.SUBTOTAL || it.SUB_TOTAL || 0);
       const kode = String(it.KODE_BARANG || it.KODE || '');
       const harga = parseNumber(it.HARGA || 0) || priceMap[kode] || 0;
       const computed = (subGiven && subGiven > 0) ? subGiven : (qty * harga);
-      const itemKey = nota + '|' + kode;
+      const itemKey = keyNota + '|' + kode;
       if (seenItemKeys.has(itemKey)) {
         duplicateItems++;
         return; // skip duplicate row
       }
       seenItemKeys.add(itemKey);
-      if (nota) {
-        perNotaItemsSum[nota] = (perNotaItemsSum[nota] || 0) + Number(computed || 0);
-        (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
+      if (keyNota) {
+        perNotaItemsSum[keyNota] = (perNotaItemsSum[keyNota] || 0) + Number(computed || 0);
+        (itemsByNota[keyNota] = itemsByNota[keyNota] || []).push(it);
       }
     });
     // itemsTotal is sum of unique per-nota sums
@@ -98,11 +108,15 @@ async function loadDashboardData(){
     // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
     let penjualanOnlyTotal = 0;
     penjualan.forEach(p => {
-      const rawNota = p.NOTA || p.NOMOR || p.NO || '';
-      const nota = normalizeNota(rawNota);
-      if (nota && (itemsByNota[nota] && itemsByNota[nota].length > 0)) {
+      const rawNota = p.ID_NOTA || p.NOTA || p.NOMOR || p.NO || '';
+      const keyNota = canonicalNotaKey(rawNota);
+      // if any items exist for this canonical nota key, skip adding penjualan.SUBTOTAL
+      if (keyNota && (itemsByNota[keyNota] && itemsByNota[keyNota].length > 0)) {
         return;
       }
+      // fallback: try older normalizeNota form (defensive)
+      const fallbackNota = normalizeNota(rawNota);
+      if (fallbackNota && (itemsByNota[fallbackNota] && itemsByNota[fallbackNota].length > 0)) return;
       const sub = parseNumber(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0);
       penjualanOnlyTotal += sub;
     });
