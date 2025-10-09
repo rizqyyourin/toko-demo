@@ -257,27 +257,41 @@ async function renderRevenuePerMonth(container, year){
 
     // draw y-axis ticks (rupiah) - 4 ticks: 0, 1/3, 2/3, maxRound
       const ticks = 4;
-      // round up to a sensible step: 100k for small, 500k for million-range
-      const roundUpTo = (v, step) => Math.ceil(v / step) * step;
-      const step = max >= 1000000 ? 500000 : 100000;
-      const niceMax = roundUpTo(max, step) || step;
-      const niceTicks = [];
-      for (let i = 0; i < ticks; i++) {
-        niceTicks.push(Math.round((niceMax * i) / (ticks - 1)));
+      // nice number algorithm to choose step as 1,2,2.5,5,10 * 10^exp
+      function niceNum(range, round){
+        const exp = Math.floor(Math.log10(range));
+        const f = range / Math.pow(10, exp);
+        let nf;
+        if (round){
+          if (f < 1.5) nf = 1;
+          else if (f < 3) nf = 2;
+          else if (f < 3.75) nf = 2.5;
+          else if (f < 7.5) nf = 5;
+          else nf = 10;
+        } else {
+          if (f <= 1) nf = 1;
+          else if (f <= 2) nf = 2;
+          else if (f <= 2.5) nf = 2.5;
+          else if (f <= 5) nf = 5;
+          else nf = 10;
+        }
+        return nf * Math.pow(10, exp);
       }
+      const step = niceNum(max / (ticks - 1), true);
+      const niceMax = step * (ticks - 1);
+      const niceTicks = [];
+      for (let i = 0; i < ticks; i++) niceTicks.push(i * step);
 
       function formatCompactRupiah(v){
         const n = Number(v) || 0;
         if (n >= 1000000){
-          // use juta (jt) with max 1 decimal if needed
           const vjt = n / 1000000;
-          // remove trailing .0
-          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(vjt);
+          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: vjt % 1 === 0 ? 0 : 1 }).format(vjt);
           return s + 'jt';
         }
         if (n >= 1000){
           const vrb = n / 1000;
-          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(vrb);
+          const s = new Intl.NumberFormat('id-ID', { maximumFractionDigits: vrb % 1 === 0 ? 0 : 1 }).format(vrb);
           return s + 'rb';
         }
         return 'Rp ' + n;
