@@ -85,22 +85,25 @@
             <div class="text-sm text-muted">Ringkasan stok tersedia, dikelompokkan berdasarkan kategori barang.</div>
           </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div class="grid grid-cols-1 gap-4 items-start">
           <div id="stock-chart" class="w-full h-56 md:h-64 pb-4"></div>
-          <div id="revenue-area" class="w-full h-56 md:h-64 flex flex-col pb-4">
-            <div class="flex items-center justify-between mb-2">
-              <div>
-                <h3 class="text-sm font-medium">Penghasilan</h3>
-              </div>
-              <div class="flex items-center gap-2">
-                <button id="prev-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">◀</button>
-                <div id="year-display" class="text-sm font-medium px-3" role="status" aria-live="polite"></div>
-                <button id="next-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">▶</button>
-              </div>
-            </div>
-            <div id="revenue-chart" class="w-full flex-1"></div>
+        </div>
+      </section>
+
+      <!-- Revenue section: separate from stock chart to avoid height conflicts -->
+      <section aria-label="Penghasilan per bulan" class="mt-6 bg-surface border border-border rounded-md p-4 pb-6 mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-lg font-semibold">Penghasilan</h2>
+            <div class="text-sm text-muted">Pilih tahun untuk melihat ringkasan per bulan.</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="prev-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">◀</button>
+            <div id="year-display" class="text-sm font-medium px-3" role="status" aria-live="polite"></div>
+            <button id="next-year" class="text-sm border border-border rounded-md bg-white px-2 py-1">▶</button>
           </div>
         </div>
+        <div id="revenue-chart" class="w-full h-64"></div>
       </section>
 
   <section aria-label="Dashboard cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
