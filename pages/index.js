@@ -68,8 +68,11 @@ async function loadDashboardData(){
     barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = parseNumber(b.HARGA || b.HARGA_BARANG || 0); });
 
     // build itemsByNota map and sum items total
+    // Deduplicate by (nota,kode) to avoid accidental double-counting caused by duplicate rows
     const itemsByNota = {};
+    const seenItemKeys = new Set();
     let itemsTotal = 0;
+    let duplicateItems = 0;
     items.forEach(it => {
       const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
       const nota = normalizeNota(rawNota);
@@ -78,10 +81,18 @@ async function loadDashboardData(){
       const kode = String(it.KODE_BARANG || it.KODE || '');
       const harga = parseNumber(it.HARGA || 0) || priceMap[kode] || 0;
       const computed = (subGiven && subGiven > 0) ? subGiven : (qty * harga);
+      // key to detect duplicates: normalized nota + kode
+      const itemKey = nota + '|' + kode;
+      if (seenItemKeys.has(itemKey)) {
+        duplicateItems++;
+        return; // skip duplicate row
+      }
+      seenItemKeys.add(itemKey);
       itemsTotal += Number(computed) || 0;
       if (!nota) return;
       (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
     });
+    if (duplicateItems > 0) console.debug('[page:index] skipped duplicate item_penjualan rows', { totalRows: items.length, duplicates: duplicateItems });
 
     // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
     let penjualanOnlyTotal = 0;
@@ -95,7 +106,10 @@ async function loadDashboardData(){
       penjualanOnlyTotal += sub;
     });
 
-    const totalRevenue = itemsTotal + penjualanOnlyTotal;
+  // diagnostics: log totals to help catch double-counting issues
+  try { console.debug('[page:index] revenue debug', { itemsRows: items.length, uniqueItemKeys: seenItemKeys.size, itemsTotal, penjualanRows: penjualan.length, penjualanOnlyTotal }); } catch(e) {}
+
+  const totalRevenue = itemsTotal + penjualanOnlyTotal;
     const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
 
     return { pelanggan, barang, penjualan, items, totalRevenue };
