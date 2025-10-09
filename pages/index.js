@@ -175,13 +175,15 @@ function renderStockChart(container, data){
       try{
         const kategori = path.getAttribute('data-kategori') || '';
         const stock = Number(path.getAttribute('data-stock') || 0) || 0;
-  // show clearer detail without percent: "KATEGORI" (header) and "stok N barang" (detail)
-  tooltip.innerHTML = `<div style="font-weight:600">${kategori}</div><div style="color:#475569;margin-top:4px">stok ${stock} barang</div>`;
-        const rect = container.getBoundingClientRect();
-        const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
-        tooltip.style.left = Math.min(rect.width - 220, x) + 'px';
-        tooltip.style.top = Math.min(rect.height - 60, y) + 'px';
-        tooltip.style.display = 'block';
+  // single-line detail: "KATEGORI — N barang" (no 'stok' word)
+  tooltip.innerHTML = `<div style="font-weight:600;display:inline-block;margin-right:8px">${kategori}</div><div style="color:#475569;display:inline-block">${stock} barang</div>`;
+  tooltip.style.whiteSpace = 'nowrap';
+  const rect = container.getBoundingClientRect();
+  const x = ev.clientX - rect.left + 12; const y = ev.clientY - rect.top + 12;
+  // keep tooltip inside chart box
+  tooltip.style.left = Math.min(Math.max(8, x), Math.max(8, rect.width - tooltip.offsetWidth - 12)) + 'px';
+  tooltip.style.top = Math.min(Math.max(8, y), Math.max(8, rect.height - tooltip.offsetHeight - 12)) + 'px';
+  tooltip.style.display = 'block';
       }catch(e){}
     });
     path.addEventListener('mousemove', (ev) => {
