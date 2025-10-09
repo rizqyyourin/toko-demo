@@ -67,11 +67,10 @@ async function loadDashboardData(){
     }
     barang.forEach(b => { const k = String(b.KODE || b.KODE_BARANG || ''); priceMap[k] = parseNumber(b.HARGA || b.HARGA_BARANG || 0); });
 
-    // build itemsByNota map and sum items total
-    // Deduplicate by (nota,kode) to avoid accidental double-counting caused by duplicate rows
+    // build deduplicated per-nota item sums
     const itemsByNota = {};
+    const perNotaItemsSum = {}; // nota -> numeric sum
     const seenItemKeys = new Set();
-    let itemsTotal = 0;
     let duplicateItems = 0;
     items.forEach(it => {
       const rawNota = it.NOTA || it.NOMOR || it.NOTA_PENJUALAN || '';
@@ -81,17 +80,19 @@ async function loadDashboardData(){
       const kode = String(it.KODE_BARANG || it.KODE || '');
       const harga = parseNumber(it.HARGA || 0) || priceMap[kode] || 0;
       const computed = (subGiven && subGiven > 0) ? subGiven : (qty * harga);
-      // key to detect duplicates: normalized nota + kode
       const itemKey = nota + '|' + kode;
       if (seenItemKeys.has(itemKey)) {
         duplicateItems++;
         return; // skip duplicate row
       }
       seenItemKeys.add(itemKey);
-      itemsTotal += Number(computed) || 0;
-      if (!nota) return;
-      (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
+      if (nota) {
+        perNotaItemsSum[nota] = (perNotaItemsSum[nota] || 0) + Number(computed || 0);
+        (itemsByNota[nota] = itemsByNota[nota] || []).push(it);
+      }
     });
+    // itemsTotal is sum of unique per-nota sums
+    const itemsTotal = Object.values(perNotaItemsSum).reduce((s,v)=>s+Number(v||0), 0);
     if (duplicateItems > 0) console.debug('[page:index] skipped duplicate item_penjualan rows', { totalRows: items.length, duplicates: duplicateItems });
 
     // For penjualan rows that have no item_penjualan entries, add their SUBTOTAL
@@ -106,10 +107,19 @@ async function loadDashboardData(){
       penjualanOnlyTotal += sub;
     });
 
-  // diagnostics: log totals to help catch double-counting issues
-  try { console.debug('[page:index] revenue debug', { itemsRows: items.length, uniqueItemKeys: seenItemKeys.size, itemsTotal, penjualanRows: penjualan.length, penjualanOnlyTotal }); } catch(e) {}
+    // diagnostics: log per-nota breakdown and overlaps to help find double-counting
+    try {
+      const perNotaArr = Object.keys(perNotaItemsSum).map(k => ({ nota: k, sum: perNotaItemsSum[k] }));
+      perNotaArr.sort((a,b)=>b.sum - a.sum);
+      const penjualanMapByNota = {};
+      penjualan.forEach(p => { const raw = p.ID_NOTA || p.NOTA || p.NOMOR || ''; const n = normalizeNota(raw); penjualanMapByNota[n] = (penjualanMapByNota[n] || 0) + parseNumber(p.SUBTOTAL || p.SUB_TOTAL || p.TOTAL || 0); });
+      const penjualanArr = Object.keys(penjualanMapByNota).map(k => ({ nota: k, sum: penjualanMapByNota[k] }));
+      penjualanArr.sort((a,b)=>b.sum - a.sum);
+      const overlap = perNotaArr.filter(x => penjualanMapByNota[x.nota]);
+      console.debug('[page:index] revenue debug', { itemsRows: items.length, uniqueItemKeys: seenItemKeys.size, itemsTotal, penjualanRows: penjualan.length, penjualanOnlyTotal, topItemNotas: perNotaArr.slice(0,8), topPenjualanNotas: penjualanArr.slice(0,8), overlapSample: overlap.slice(0,8) });
+    } catch(e) { console.debug('[page:index] revenue debug failed', e); }
 
-  const totalRevenue = itemsTotal + penjualanOnlyTotal;
+    const totalRevenue = itemsTotal + penjualanOnlyTotal;
     const elR = document.getElementById('count-revenue'); if (elR) elR.textContent = totalRevenue && totalRevenue>0 ? formatCurrency(totalRevenue) : '—';
 
     return { pelanggan, barang, penjualan, items, totalRevenue };
