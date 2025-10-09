@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Toko App</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -132,6 +134,36 @@
             </div>
           </div>
         </a>
+      </section>
+
+      <!-- Analytics section (charts) -->
+      <section aria-label="Analytics" class="mt-6">
+        <h2 class="text-lg font-semibold mb-3">Analytics</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-surface border border-border rounded-md p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold">Stok per Kategori Barang</h3>
+            </div>
+            <div class="w-full" style="min-height:220px;">
+              <canvas id="chart-stock" aria-label="Stok per Kategori" role="img"></canvas>
+              <div id="stock-empty" class="text-sm text-muted mt-2 hidden">Kolom STOCK tidak ditemukan</div>
+            </div>
+          </div>
+
+          <div class="bg-surface border border-border rounded-md p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold">Penjualan per Bulan</h3>
+              <div class="flex items-center gap-2">
+                <label for="select-year" class="sr-only">Pilih Tahun</label>
+                <select id="select-year" class="text-sm border border-border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"></select>
+              </div>
+            </div>
+            <div class="w-full" style="min-height:220px;">
+              <canvas id="chart-sales" aria-label="Penjualan per Bulan" role="img"></canvas>
+            </div>
+            <div id="sales-summary" class="text-sm text-muted mt-3">&nbsp;</div>
+          </div>
+        </div>
       </section>
     </main>
     <script type="module" src="./pages/index.js"></script>
