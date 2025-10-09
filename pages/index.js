@@ -44,7 +44,18 @@ function renderStockChart({ labels = [], values = [] } = {}){
   const isMobile = window.matchMedia('(max-width: 767px)').matches;
   const cfg = {
     type: isMobile ? 'bar' : 'bar', // we'll flip index/axis via options
-    data: { labels, datasets: [{ label: 'Stok', data: values, backgroundColor: 'rgba(99,102,241,0.28)', borderColor: 'rgba(79,70,229,1)', borderWidth: 1 }] },
+    data: (function(){
+      // build per-category palette (HSL hues evenly spaced)
+      const n = labels.length || 1;
+      const bg = [];
+      const bd = [];
+      for(let i=0;i<n;i++){
+        const hue = Math.round((i * 360) / n);
+        bg.push(`hsla(${hue},70%,50%,0.28)`);
+        bd.push(`hsl(${hue},70%,40%)`);
+      }
+      return { labels, datasets: [{ label: 'Stok', data: values, backgroundColor: bg, borderColor: bd, borderWidth: 1 }] };
+    })(),
     options: {
       indexAxis: isMobile ? 'y' : 'x',
       responsive: true,
